@@ -43,13 +43,21 @@ def build_unified_ticket_table(
     twitter_df: pd.DataFrame,
     tickets_df: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Create unified schema across real Twitter conversations + structured ticket data."""
+    """Create unified schema across real Twitter conversations + structured ticket data.
+
+    Only inbound (customer-authored) Twitter messages are included to prevent
+    agent-generated text from contaminating the training labels.
+    """
     twitter_df = twitter_df.copy()
     tickets_df = tickets_df.copy()
 
+    # Keep only customer-side messages; agent replies are not training signal
+    if "inbound" in twitter_df.columns:
+        twitter_df = twitter_df[twitter_df["inbound"] == True].copy()
+
     twitter_df["subject"] = twitter_df.get("text", "")
     twitter_df["description"] = twitter_df.get("text", "")
-    twitter_df["category"] = twitter_df.get("inbound", False).map({True: "customer_message", False: "agent_message"})
+    twitter_df["category"] = "customer_message"
     twitter_df["source"] = "twitter_support"
 
     tickets_df["source"] = "structured_tickets"
@@ -68,4 +76,5 @@ def build_unified_ticket_table(
 
     unified = pd.concat([twitter_min[shared_cols], tickets_min[shared_cols]], ignore_index=True)
     unified = unified.dropna(subset=["description"]).reset_index(drop=True)
+    unified = unified.drop_duplicates(subset=["description"]).reset_index(drop=True)
     return unified
