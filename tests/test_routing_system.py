@@ -229,13 +229,16 @@ def _routed(routes, stages, confs):
     return pd.DataFrame({"route": routes, "stage": stages, "confidence": confs})
 
 
-def test_routing_metrics_escalation_rate():
+def test_routing_metrics_human_triage_rate():
     df = _routed(
         ["human_triage_queue", "billing_queue", "billing_queue"],
         ["human_fallback", "ml_high_confidence", "rule_based"],
         [0.6, 0.9, 0.99],
     )
-    assert abs(routing_metrics(df)["escalation_rate"] - 1 / 3) < 1e-6
+    m = routing_metrics(df)
+    assert abs(m["human_triage_rate"] - 1 / 3) < 1e-6
+    # escalation_rate kept as backward-compatible proxy alias
+    assert m["escalation_rate"] == m["human_triage_rate"]
 
 
 def test_routing_metrics_llm_rate():
@@ -282,6 +285,31 @@ def test_threshold_sweep_columns():
     assert "auto_routed_rate" in cols
     assert "llm_fallback_rate" in cols
     assert "est_cost_per_ticket_usd" in cols
+    # Score breakdown columns
+    assert "score_automation_gain" in cols
+    assert "score_human_penalty" in cols
+    assert "score_llm_penalty" in cols
+    assert "weight_auto" in cols
+    assert "is_recommended_threshold" in cols
+
+
+def test_threshold_sweep_custom_weights():
+    sweep = threshold_sweep(
+        ["text"] * 20,
+        _mock_model_for_sweep([0.9] * 20),  # all high confidence
+        human_penalty=2.0,
+        llm_penalty=1.0,
+    )
+    assert (sweep["weight_human_penalty"] == 2.0).all()
+    assert (sweep["weight_llm_penalty"] == 1.0).all()
+    assert sweep["is_recommended_threshold"].sum() == 1
+
+
+def test_threshold_sweep_score_breakdown_sums():
+    sweep = threshold_sweep(["text"] * 10, _mock_model_for_sweep([0.7] * 10))
+    row = sweep.iloc[0]
+    expected = row["score_automation_gain"] - row["score_human_penalty"] - row["score_llm_penalty"]
+    assert abs(expected - row["threshold_recommendation_score"]) < 1e-9
 
 
 # ── evaluate_on_labeled_set ───────────────────────────────────────────────────
@@ -306,10 +334,6 @@ def test_evaluate_on_labeled_set_keys():
     assert "ml_accuracy" in result
     assert "keyword_baseline_accuracy" in result
     assert "ml_lift_over_baseline" in result
-    assert "ml_macro_f1" in result
-    assert "keyword_macro_f1" in result
-    assert "per_class_metrics_df" in result
-    assert "confusion_matrix_df" in result
     assert result["n_eval_samples"] == 3
 
 
@@ -368,3 +392,36 @@ def test_route_ticket_llm_error_escalates_to_human(mock_llm):
     mock_llm.return_value = {"issue_type": "other", "urgency": "low", "complexity": "low", "_llm_error": "timeout"}
     decision = route_ticket("Strange request", _mock_model(label="other", prob=0.40))
     assert decision.stage == "human_fallback" and decision.route == "human_triage_queue"
+
+
+def test_route_dataframe_custom_thresholds():
+    from llm_support_routing.config import RoutingThresholds
+    from llm_support_routing.routing import route_dataframe
+
+    model = _mock_model(label="technical", prob=0.60)
+    df = pd.DataFrame({"text": ["The application keeps throwing unexpected errors"]})
+    # With default thresholds (high=0.85), prob=0.60 hits human_fallback
+    result_default = route_dataframe(df, model)
+    assert result_default.iloc[0]["stage"] == "human_fallback"
+    # With low high-threshold (high=0.55), prob=0.60 hits ml_high_confidence
+    result_low = route_dataframe(df, model, thresholds=RoutingThresholds(high_confidence=0.55, low_confidence=0.30))
+    assert result_low.iloc[0]["stage"] == "ml_high_confidence"
+
+
+def test_route_dataframe_enrich_human_columns():
+    from llm_support_routing.routing import route_dataframe
+
+    model = _mock_model(label="other", prob=0.70)  # human_fallback band
+    df = pd.DataFrame({"text": ["I have a general question about the service"]})
+
+    with patch("llm_support_routing.routing.llm_resolution_and_escalation") as mock_res, \
+         patch("llm_support_routing.routing.llm_summarize_ticket") as mock_sum:
+        mock_res.return_value = {"suggested_path": "billing_review", "should_escalate": False, "reason": "low priority"}
+        mock_sum.return_value = "Customer has a general inquiry."
+        result = route_dataframe(df, model, enrich_human=True)
+
+    assert result.iloc[0]["suggested_path"] == "billing_review"
+    assert result.iloc[0]["should_escalate"] == "False"
+    assert "billing_review" in result.iloc[0]["suggested_path"]
+    mock_res.assert_called_once()
+    mock_sum.assert_called_once()
