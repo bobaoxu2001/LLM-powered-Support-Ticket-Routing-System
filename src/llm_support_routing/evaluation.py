@@ -165,6 +165,18 @@ def threshold_sweep(
     Apply recommended thresholds explicitly via --high-threshold /
     --low-threshold in run_pipeline.py; they are not applied automatically.
     """
+    _SWEEP_COLUMNS = [
+        "threshold_high", "threshold_low",
+        "auto_routed_rate_estimated", "llm_fallback_rate_estimated", "human_fallback_rate_estimated",
+        "avg_confidence_auto", "cost_per_ticket_usd_estimated",
+        "score_automation_gain", "score_human_penalty", "score_llm_penalty",
+        "threshold_recommendation_score", "weight_auto", "weight_human_penalty", "weight_llm_penalty",
+        "auto_routed_rate", "llm_fallback_rate", "human_fallback_rate",
+        "est_cost_per_ticket_usd", "is_recommended_threshold",
+    ]
+    if not texts:
+        return pd.DataFrame(columns=_SWEEP_COLUMNS)
+
     _, probs = predict_with_confidence(model, texts)
     rows = []
     for t_high in [round(v * 0.05 + 0.50, 2) for v in range(10)]:  # 0.50 … 0.95

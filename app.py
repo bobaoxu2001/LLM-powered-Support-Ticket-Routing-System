@@ -174,12 +174,20 @@ if model_path.exists():
         return load_model(str(urgency_model_path)) if urgency_model_path.exists() else None
 
     ticket_text = st.text_area("Paste a support ticket:", height=120)
+    enrich_live = st.checkbox(
+        "Enrich human fallback with LLM guidance",
+        value=False,
+        help="If the ticket lands in human_fallback, call llm_resolution_and_escalation() "
+             "and llm_summarize_ticket(). Requires a configured OPENAI_API_KEY and incurs "
+             "an extra LLM call.",
+    )
     if st.button("Route") and ticket_text.strip():
         with st.spinner("Routing..."):
             decision = route_ticket(
                 ticket_text,
                 _load_issue_model(),
                 urgency_model=_load_urgency_model(),
+                enrich_human=enrich_live,
             )
         st.success(f"**Queue:** {decision.route}")
         cols = st.columns(3)
@@ -188,5 +196,14 @@ if model_path.exists():
         cols[2].metric("Issue Type", decision.metadata.get("issue_type", "—"))
         if decision.metadata.get("urgency"):
             st.info(f"Urgency: **{decision.metadata['urgency']}** | Complexity: **{decision.metadata.get('complexity', '—')}**")
+        if decision.stage == "human_fallback" and decision.metadata.get("suggested_path"):
+            st.subheader("LLM Resolution Guidance")
+            g1, g2 = st.columns(2)
+            g1.write(f"**Suggested path:** {decision.metadata['suggested_path']}")
+            g2.write(f"**Should escalate:** {decision.metadata['should_escalate']}")
+            if decision.metadata.get("reason"):
+                st.write(f"**Reason:** {decision.metadata['reason']}")
+            if decision.metadata.get("llm_summary"):
+                st.write(f"**Summary:** {decision.metadata['llm_summary']}")
 else:
     st.info("Train the model first (`python scripts/run_pipeline.py`) to enable live routing.")

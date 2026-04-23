@@ -47,12 +47,22 @@ The 4-stage cascade (`rule → ML → LLM → human`) is implemented coherently.
 ### 3) Evaluation credibility improvements
 
 - Pipeline computes held-out accuracy and 5-fold CV per label dimension.
-- Includes direct ML-vs-keyword baseline comparison on a labeled eval set.
-- Produces threshold sweep artifact quantifying auto-route rate, LLM fallback, human fallback, and estimated cost.
+- Includes direct ML-vs-keyword baseline comparison on a labeled eval set, producing accuracy, macro-F1, weighted-F1, per-class tables, and confusion matrices.
+- **Eval artifacts (`eval_comparison.csv`, `eval_per_class_metrics.csv`, `eval_confusion_matrix.csv`) are only generated when `data/eval/eval_tickets.csv` is present.** Stale artifacts from previous runs are deleted if the eval set is absent, so the dashboard never shows old results as current.
+- Produces threshold sweep artifact quantifying auto-route rate, estimated LLM fallback, human fallback, and estimated cost per threshold. **The recommended threshold is analytic (ML confidence distribution only) and is not automatically applied** — it must be set explicitly via `--high-threshold` / `--low-threshold`.
 
 **Why this matters:** this is the core question for BDS roles — “what incremental business value does ML add?”
 
-### 4) Portfolio/usability quality
+### 4) LLM role clarity
+
+Two distinct LLM uses are correctly separated:
+
+- **LLM reasoning stage** (`llm_classify_ticket`): called for low-confidence tickets to perform **issue-type classification**. Returns a JSON result used to assign the routing queue. This is a classification step, not escalation guidance.
+- **Human-fallback enrichment** (`--enrich-human-with-llm`, opt-in): called separately for human-triage tickets to provide `suggested_path`, `should_escalate`, `reason`, and `llm_summary` as resolution guidance. This incurs extra LLM calls and is disabled by default.
+
+**Why this matters:** conflating classification and escalation guidance is a common credibility error in portfolio LLM projects.
+
+### 5) Portfolio/usability quality
 
 - Streamlit dashboard presents KPIs and operating curves.
 - Interactive live routing demo helps interviewers quickly validate behavior.

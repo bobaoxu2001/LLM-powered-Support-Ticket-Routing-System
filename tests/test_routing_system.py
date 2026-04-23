@@ -425,3 +425,56 @@ def test_route_dataframe_enrich_human_columns():
     assert "billing_review" in result.iloc[0]["suggested_path"]
     mock_res.assert_called_once()
     mock_sum.assert_called_once()
+
+
+def test_threshold_sweep_empty_input_returns_empty_dataframe():
+    from llm_support_routing.evaluation import threshold_sweep
+
+    model = _mock_model(label="other", prob=0.5)
+    result = threshold_sweep([], model)
+    assert result.empty
+    assert "threshold_high" in result.columns
+    assert "is_recommended_threshold" in result.columns
+
+
+def test_route_ticket_enrich_human_populates_metadata():
+    from llm_support_routing.routing import route_ticket
+
+    model = _mock_model(label="other", prob=0.70)  # human_fallback band
+
+    with patch("llm_support_routing.routing.llm_resolution_and_escalation") as mock_res, \
+         patch("llm_support_routing.routing.llm_summarize_ticket") as mock_sum:
+        mock_res.return_value = {"suggested_path": "refund_team", "should_escalate": True, "reason": "policy exception"}
+        mock_sum.return_value = "Customer requests exception."
+        decision = route_ticket(
+            "I have a general question about the service",
+            model,
+            enrich_human=True,
+        )
+
+    assert decision.stage == "human_fallback"
+    assert decision.metadata["suggested_path"] == "refund_team"
+    assert decision.metadata["should_escalate"] == "True"
+    assert decision.metadata["reason"] == "policy exception"
+    assert decision.metadata["llm_summary"] == "Customer requests exception."
+    mock_res.assert_called_once()
+    mock_sum.assert_called_once()
+
+
+def test_route_ticket_enrich_human_not_called_for_non_fallback():
+    """enrich_human should not fire for rule-based or ML-high-confidence tickets."""
+    from llm_support_routing.routing import route_ticket
+
+    model = _mock_model(label="billing", prob=0.95)
+
+    with patch("llm_support_routing.routing.llm_resolution_and_escalation") as mock_res, \
+         patch("llm_support_routing.routing.llm_summarize_ticket") as mock_sum:
+        decision = route_ticket(
+            "I need help with my payment",  # no rule match, high-confidence ML
+            model,
+            enrich_human=True,
+        )
+
+    assert decision.stage == "ml_high_confidence"
+    mock_res.assert_not_called()
+    mock_sum.assert_not_called()
