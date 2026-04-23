@@ -32,8 +32,10 @@ routed = pd.read_csv(routed_path)
 
 # ── KPI tiles ────────────────────────────────────────────────────────────────
 col1, col2, col3, col4, col5 = st.columns(5)
+human_triage_rate = metrics.get("human_triage_rate", metrics.get("escalation_rate", 0.0))
 col1.metric("Tickets", int(metrics["tickets"]))
-col2.metric("Escalation Rate", f"{metrics['escalation_rate']:.2%}")
+col2.metric("Human Triage Rate", f"{human_triage_rate:.2%}",
+            help="Fraction routed to human_triage_queue (routing proxy, not true escalation rate)")
 col3.metric("LLM Invocation", f"{metrics['llm_invocation_rate']:.2%}")
 col4.metric("Avg Confidence", f"{metrics.get('avg_routing_confidence', 0):.2%}")
 col5.metric("Cost / Ticket (USD)", f"${metrics['cost_per_ticket_usd']:.5f}")
@@ -98,11 +100,59 @@ if sweep_path.exists():
     st.plotly_chart(fig_sweep, use_container_width=True)
 
     fig_cost = px.line(
-        sweep, x="threshold_high", y="est_cost_per_ticket_usd",
-        labels={"threshold_high": "High-confidence threshold", "est_cost_per_ticket_usd": "Est. cost / ticket (USD)"},
+        sweep, x="threshold_high", y="cost_per_ticket_usd_estimated",
+        labels={"threshold_high": "High-confidence threshold", "cost_per_ticket_usd_estimated": "Est. cost / ticket (USD)"},
         title="Estimated cost per ticket vs. confidence threshold",
     )
     st.plotly_chart(fig_cost, use_container_width=True)
+
+    if "is_recommended_threshold" in sweep.columns and sweep["is_recommended_threshold"].any():
+        rec = sweep[sweep["is_recommended_threshold"]].iloc[0]
+        st.info(
+            f"Recommended threshold (estimated): high={rec['threshold_high']:.2f}, low={rec['threshold_low']:.2f}, "
+            f"auto-route={rec['auto_routed_rate_estimated']:.1%}, human-fallback={rec['human_fallback_rate_estimated']:.1%}"
+        )
+
+# ── Evaluation artifacts (measured on labeled eval set) ─────────────────────
+if eval_summary_path.exists():
+    st.subheader("Labeled Eval Set: ML vs Keyword Baseline (Measured)")
+    eval_summary = pd.read_csv(eval_summary_path)
+    st.dataframe(eval_summary, use_container_width=True)
+
+if eval_per_class_path.exists():
+    st.subheader("Per-Class Metrics (Measured)")
+    per_class = pd.read_csv(eval_per_class_path)
+    display_cols = ["model", "label", "precision", "recall", "f1_score", "support"]
+    st.dataframe(per_class[display_cols], use_container_width=True)
+
+if eval_confusion_path.exists():
+    st.subheader("Confusion Matrix Heatmap (Measured)")
+    cm = pd.read_csv(eval_confusion_path)
+    model_choice = st.selectbox("Confusion matrix model", sorted(cm["model"].unique().tolist()))
+    cm_model = cm[cm["model"] == model_choice]
+    cm_pivot = cm_model.pivot(index="actual_label", columns="predicted_label", values="count").fillna(0)
+    st.plotly_chart(
+        px.imshow(cm_pivot, text_auto=True, color_continuous_scale="Blues",
+                  labels={"x": "Predicted", "y": "Actual", "color": "Count"}),
+        use_container_width=True,
+    )
+
+
+if not eval_summary_path.exists() and not eval_per_class_path.exists() and not eval_confusion_path.exists():
+    st.caption("Measured eval artifacts not found. Add `data/eval/eval_tickets.csv` and rerun pipeline to generate them.")
+
+# ── Human-fallback enrichment (shown when --enrich-human-with-llm was used) ──
+enrich_cols = ["suggested_path", "should_escalate", "reason"]
+if all(c in routed.columns for c in enrich_cols) and routed[enrich_cols[0]].ne("").any():
+    st.subheader("Human-Fallback Enrichment (LLM Resolution Guidance)")
+    enriched = routed[routed["stage"] == "human_fallback"][
+        ["text", "confidence", "llm_urgency"] + enrich_cols + ["llm_summary"]
+    ].copy()
+    enriched = enriched[enriched["suggested_path"].ne("")]
+    if not enriched.empty:
+        st.dataframe(enriched.reset_index(drop=True), use_container_width=True)
+    else:
+        st.caption("No enriched human-fallback tickets in this run.")
 
 # ── Training report ───────────────────────────────────────────────────────────
 if report_path.exists():
