@@ -182,7 +182,7 @@ Dashboard includes:
 - Threshold sweep charts (coverage and cost)
 - Interactive “Route a Ticket” demo
 
----
+## Dashboard
 
 ## Interview framing (Google BDS / gDATA style)
 
