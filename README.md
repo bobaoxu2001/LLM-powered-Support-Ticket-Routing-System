@@ -38,10 +38,12 @@ Human triage (uncertain or LLM-unavailable)
 
 1. **Rule-based**: deterministic patterns in `RULE_PATTERNS`.
 2. **ML high-confidence**: TF-IDF + Logistic Regression (calibrated) routes automatically when confidence ≥ high threshold.
-3. **LLM reasoning**: low-confidence cases use LLM JSON classification.
-4. **Human fallback**: middle-confidence ambiguity and LLM failures route to human queue.
+3. **LLM reasoning** (low-confidence cases): LLM performs **issue-type classification** and returns a JSON result used to assign the queue. This is not escalation guidance — it is a classification call to resolve ambiguous tickets.
+4. **Human fallback**: middle-confidence ambiguity and LLM failures route to `human_triage_queue`.
 
 Urgency can append `_priority` to queues (e.g., `billing_queue_priority`) when urgency is `high`/`critical`.
+
+**Optional human-fallback enrichment** (`--enrich-human-with-llm`): for human-fallback tickets, calls `llm_resolution_and_escalation()` and `llm_summarize_ticket()` to add `suggested_path`, `should_escalate`, `reason`, and `llm_summary` columns to the output. This is separate from the routing step and incurs additional LLM calls.
 
 ---
 
@@ -120,6 +122,17 @@ python scripts/run_pipeline.py --download
 
 If data is already present locally, run without `--download`.
 
+**Threshold tuning** (optional):
+```bash
+python scripts/run_pipeline.py --high-threshold 0.80 --low-threshold 0.50
+```
+Use `outputs/threshold_sweep.csv` to pick an operating point, then re-run with the chosen values. The sweep recommendation is **analytic only** (based on ML confidence distribution); it is not applied automatically.
+
+**Human-fallback enrichment** (optional, incurs extra LLM calls):
+```bash
+python scripts/run_pipeline.py --enrich-human-with-llm
+```
+
 ---
 
 ## Artifacts generated
@@ -133,8 +146,14 @@ After pipeline execution:
 - `outputs/routed_tickets.csv`
 - `outputs/routing_metrics.csv`
 - `outputs/threshold_sweep.csv`
-- `outputs/eval_comparison.csv` (if eval set exists)
+- `outputs/routing_policy_recommendation.csv` (analytic estimate — not automatically applied)
 - `outputs/training_report.txt`
+
+The following artifacts are **only generated when `data/eval/eval_tickets.csv` exists**. If the file is absent, any stale versions are deleted so the dashboard never shows old results as current:
+
+- `outputs/eval_comparison.csv` — accuracy + macro/weighted F1 for ML and keyword baseline
+- `outputs/eval_per_class_metrics.csv` — per-class precision/recall/F1 for both models
+- `outputs/eval_confusion_matrix.csv` — confusion matrix for both models
 
 ---
 
@@ -146,22 +165,20 @@ For each target (`issue_type`, `urgency`, `complexity`):
 - 5-fold CV mean ± std
 
 ### B) ML vs keyword baseline on labeled eval set
-If `data/eval/eval_tickets.csv` exists, pipeline reports:
-- `ml_accuracy`
-- `keyword_baseline_accuracy`
-- `ml_lift_over_baseline`
-- classification reports for both
+**Only generated when `data/eval/eval_tickets.csv` is present.** Pipeline reports:
+- `ml_accuracy`, `keyword_baseline_accuracy`, accuracy lift
+- macro-F1 and weighted-F1 for both models, with lifts
+- per-class precision/recall/F1 tables
+- confusion matrices
 
 This directly answers: **Does ML add signal over hand-written keywords?**
 
 ### C) Confidence threshold sweep
-Generates operating curve over thresholds (0.50 to 0.95):
-- auto-routed rate
-- estimated LLM fallback rate
-- estimated human fallback rate
-- estimated cost/ticket
+Generates an operating curve over thresholds (0.50 to 0.95) using **ML confidence scores only — no live LLM calls are made**.
 
-This supports business decisions around cost vs automation coverage vs risk.
+Columns include: auto-routed rate, estimated LLM fallback rate, estimated human fallback rate, estimated cost/ticket, and a weighted recommendation score.
+
+**The recommended threshold is analytic only.** It is not automatically applied — re-run with `--high-threshold` and `--low-threshold` to apply a chosen operating point.
 
 ---
 
@@ -174,15 +191,17 @@ streamlit run app.py
 ```
 
 Dashboard includes:
-- KPI cards (`tickets`, `escalation_rate`, `llm_invocation_rate`, confidence, cost)
+- KPI cards (`tickets`, `human_triage_rate`, `llm_invocation_rate`, confidence, estimated cost)
 - Stage and queue distributions
 - Urgency distribution
 - Confidence histograms by stage
 - Stage→queue flow view
-- Threshold sweep charts (coverage and cost)
-- Interactive “Route a Ticket” demo
+- Threshold sweep charts (coverage and cost); `is_recommended_threshold` highlight
+- Labeled eval set comparison (accuracy, macro-F1), per-class metrics, confusion heatmap — **only when `data/eval/eval_tickets.csv` was present at last pipeline run**
+- Human-fallback enrichment table (when `--enrich-human-with-llm` was used)
+- Interactive “Route a Ticket” live demo with optional enrichment checkbox
 
-## Dashboard
+---
 
 ## Interview framing (Google BDS / gDATA style)
 

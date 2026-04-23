@@ -51,6 +51,7 @@ def route_ticket(
     model,
     thresholds: RoutingThresholds = RoutingThresholds(),
     urgency_model=None,
+    enrich_human: bool = False,
 ) -> RoutingDecision:
     text_lower = text.lower()
 
@@ -112,11 +113,18 @@ def route_ticket(
         )
 
     # 4) Human fallback for uncertain middle-confidence band
+    meta: dict[str, Any] = {"issue_type": label, "urgency": urgency}
+    if enrich_human:
+        resolution = llm_resolution_and_escalation(text)
+        meta["llm_summary"] = llm_summarize_ticket(text)
+        meta["suggested_path"] = str(resolution.get("suggested_path", ""))
+        meta["should_escalate"] = str(resolution.get("should_escalate", ""))
+        meta["reason"] = str(resolution.get("reason", ""))
     return RoutingDecision(
         route="human_triage_queue",
         stage="human_fallback",
         confidence=prob,
-        metadata={"issue_type": label, "urgency": urgency},
+        metadata=meta,
     )
 
 
