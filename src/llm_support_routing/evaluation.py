@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import pandas as pd
 
+from .models import predict_with_confidence
 
-# GPT-4.1-mini pricing (as of 2025): $0.40/1M input tokens, $1.60/1M output tokens.
+# GPT-4.1-mini pricing (2025): $0.40/1M input tokens, $1.60/1M output tokens.
 # Assuming ~200 input tokens + ~50 output tokens per LLM classify call.
 _LLM_COST_PER_CALL_USD = (200 * 0.40 + 50 * 1.60) / 1_000_000
 _INFRA_COST_PER_TICKET_USD = 0.0001
@@ -21,7 +22,6 @@ def routing_metrics(routed_df: pd.DataFrame) -> dict[str, float]:
     human_rate = float((routed_df["stage"] == "human_fallback").mean())
     avg_confidence = float(routed_df["confidence"].mean())
 
-    # Cost model: infra baseline + LLM token cost only for tickets that hit the LLM
     cost_per_ticket = _INFRA_COST_PER_TICKET_USD + llm_rate * _LLM_COST_PER_CALL_USD
 
     metrics: dict[str, float] = {
@@ -35,8 +35,40 @@ def routing_metrics(routed_df: pd.DataFrame) -> dict[str, float]:
         "cost_per_ticket_usd": cost_per_ticket,
     }
 
-    # Per-queue distribution
     for queue, frac in routed_df["route"].value_counts(normalize=True).items():
         metrics[f"queue_pct_{queue}"] = float(frac)
 
     return metrics
+
+
+def threshold_sweep(texts: list[str], model) -> pd.DataFrame:
+    """Sweep the high-confidence threshold from 0.50 to 0.95 using ML predictions only.
+
+    For each threshold value reports the auto-route rate (ML stage), the estimated
+    LLM fallback rate (low-confidence band, using low = threshold * 0.65), the
+    average confidence of auto-routed tickets, and the resulting estimated cost
+    per ticket. Use this to pick an operating point on the cost-coverage curve.
+    """
+    _, probs = predict_with_confidence(model, texts)
+    rows = []
+    for t_high in [round(v * 0.05 + 0.50, 2) for v in range(10)]:  # 0.50 … 0.95
+        t_low = round(t_high * 0.65, 2)
+        auto_mask = probs >= t_high
+        llm_mask = probs < t_low
+        human_mask = (probs >= t_low) & (probs < t_high)
+
+        auto_rate = float(auto_mask.mean())
+        llm_rate = float(llm_mask.mean())
+        avg_conf = float(probs[auto_mask].mean()) if auto_mask.any() else 0.0
+        cost = _INFRA_COST_PER_TICKET_USD + llm_rate * _LLM_COST_PER_CALL_USD
+
+        rows.append({
+            "threshold_high": t_high,
+            "threshold_low": t_low,
+            "auto_routed_rate": auto_rate,
+            "llm_fallback_rate": llm_rate,
+            "human_fallback_rate": float(human_mask.mean()),
+            "avg_confidence_auto": avg_conf,
+            "est_cost_per_ticket_usd": cost,
+        })
+    return pd.DataFrame(rows)
