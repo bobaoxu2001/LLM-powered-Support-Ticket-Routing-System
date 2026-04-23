@@ -24,6 +24,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 logger = logging.getLogger(__name__)
 
 EVAL_SET_PATH = PROJECT_ROOT / "data" / "eval" / "eval_tickets.csv"
+EVAL_SUMMARY_PATH = OUTPUTS_DIR / "eval_comparison.csv"
+EVAL_PER_CLASS_PATH = OUTPUTS_DIR / "eval_per_class_metrics.csv"
+EVAL_CONFUSION_PATH = OUTPUTS_DIR / "eval_confusion_matrix.csv"
 
 
 def _first_frame(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
@@ -139,11 +142,16 @@ def main(download: bool) -> None:
             "ml_weighted_f1": eval_result["ml_weighted_f1"],
             "keyword_weighted_f1": eval_result["keyword_weighted_f1"],
             "ml_weighted_f1_lift": eval_result["ml_weighted_f1_lift_over_baseline"],
-        }]).to_csv(OUTPUTS_DIR / "eval_comparison.csv", index=False)
-        eval_result["per_class_metrics_df"].to_csv(OUTPUTS_DIR / "eval_per_class_metrics.csv", index=False)
-        eval_result["confusion_matrix_df"].to_csv(OUTPUTS_DIR / "eval_confusion_matrix.csv", index=False)
+        }]).to_csv(EVAL_SUMMARY_PATH, index=False)
+        eval_result["per_class_metrics_df"].to_csv(EVAL_PER_CLASS_PATH, index=False)
+        eval_result["confusion_matrix_df"].to_csv(EVAL_CONFUSION_PATH, index=False)
     else:
         logger.info("No eval set found at %s — skipping baseline comparison.", EVAL_SET_PATH)
+        # Avoid stale eval artifacts from previous runs appearing as fresh results.
+        for stale in (EVAL_SUMMARY_PATH, EVAL_PER_CLASS_PATH, EVAL_CONFUSION_PATH):
+            if stale.exists():
+                stale.unlink()
+                logger.info("Removed stale eval artifact: %s", stale.name)
 
     # ── Route a sample using issue + urgency models ───────────────────────────
     logger.info("Routing sample of 5000 tickets...")
@@ -157,17 +165,20 @@ def main(download: bool) -> None:
     sweep_df.to_csv(OUTPUTS_DIR / "threshold_sweep.csv", index=False)
 
     # ── Suggested operating point from threshold sweep (estimated metrics) ───────
-    recommended = sweep_df[sweep_df["is_recommended_threshold"]].iloc[0]
-    pd.DataFrame([{
-        "metric_type": "estimated_policy_from_threshold_sweep",
-        "recommended_threshold_high": recommended["threshold_high"],
-        "recommended_threshold_low": recommended["threshold_low"],
-        "auto_routed_rate_estimated": recommended["auto_routed_rate_estimated"],
-        "llm_fallback_rate_estimated": recommended["llm_fallback_rate_estimated"],
-        "human_fallback_rate_estimated": recommended["human_fallback_rate_estimated"],
-        "cost_per_ticket_usd_estimated": recommended["cost_per_ticket_usd_estimated"],
-        "threshold_recommendation_score": recommended["threshold_recommendation_score"],
-    }]).to_csv(OUTPUTS_DIR / "routing_policy_recommendation.csv", index=False)
+    if not sweep_df.empty and sweep_df["is_recommended_threshold"].any():
+        recommended = sweep_df[sweep_df["is_recommended_threshold"]].iloc[0]
+        pd.DataFrame([{
+            "metric_type": "estimated_policy_from_threshold_sweep",
+            "recommended_threshold_high": recommended["threshold_high"],
+            "recommended_threshold_low": recommended["threshold_low"],
+            "auto_routed_rate_estimated": recommended["auto_routed_rate_estimated"],
+            "llm_fallback_rate_estimated": recommended["llm_fallback_rate_estimated"],
+            "human_fallback_rate_estimated": recommended["human_fallback_rate_estimated"],
+            "cost_per_ticket_usd_estimated": recommended["cost_per_ticket_usd_estimated"],
+            "threshold_recommendation_score": recommended["threshold_recommendation_score"],
+        }]).to_csv(OUTPUTS_DIR / "routing_policy_recommendation.csv", index=False)
+    else:
+        logger.info("Threshold sweep did not produce a recommendation (empty sample).")
 
     # ── Persist outputs ───────────────────────────────────────────────────────
     routed.to_csv(OUTPUTS_DIR / "routed_tickets.csv", index=False)

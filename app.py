@@ -140,6 +140,10 @@ if eval_confusion_path.exists():
         use_container_width=True,
     )
 
+
+if not eval_summary_path.exists() and not eval_per_class_path.exists() and not eval_confusion_path.exists():
+    st.caption("Measured eval artifacts not found. Add `data/eval/eval_tickets.csv` and rerun pipeline to generate them.")
+
 # ── Training report ───────────────────────────────────────────────────────────
 if report_path.exists():
     with st.expander("Model Training Report (all classifiers)"):

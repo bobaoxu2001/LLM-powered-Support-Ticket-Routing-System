@@ -49,6 +49,7 @@ The 4-stage cascade (`rule → ML → LLM → human`) is implemented coherently.
 - Pipeline computes held-out accuracy and 5-fold CV per label dimension.
 - Includes direct ML-vs-keyword baseline comparison on a labeled eval set.
 - Produces threshold sweep + recommendation artifact quantifying estimated auto-route, LLM fallback, human fallback, and cost tradeoffs.
+- Avoids stale reporting by clearing eval artifacts when no labeled eval set is available in a run.
 
 **Why this matters:** this is the core question for BDS roles — “what incremental business value does ML add?”
 

@@ -157,6 +157,8 @@ If `data/eval/eval_tickets.csv` exists, pipeline reports:
 
 This directly answers: **Does ML add signal over hand-written keywords?** and makes class-level tradeoffs inspectable.
 
+If the eval set is not present, the pipeline skips this block and removes stale eval CSVs from prior runs to avoid misleading dashboards.
+
 ### C) Confidence threshold sweep (**estimated**)
 Generates operating curve over thresholds (0.50 to 0.95):
 - auto-routed rate (estimated)
@@ -168,6 +170,11 @@ Generates operating curve over thresholds (0.50 to 0.95):
 This supports business decisions around cost vs automation coverage vs risk while clearly separating measured vs estimated metrics.
 
 ---
+
+
+### D) Metric semantics cheat sheet
+- **Measured**: values computed from labeled ground truth (e.g., `ml_macro_f1` in `eval_comparison.csv`).
+- **Estimated**: values derived from assumptions/confidence distributions (e.g., `cost_per_ticket_usd_estimated` in `threshold_sweep.csv` / `routing_metrics.csv`).
 
 ## Dashboard
 
