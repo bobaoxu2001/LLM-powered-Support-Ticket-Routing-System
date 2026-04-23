@@ -1,96 +1,100 @@
 # LLM-powered Support Ticket Routing System
 
-Author: **Allen Xu**  
-Language: **English**
+Author: **Allen Xu**
 
-This project is an end-to-end **Support Operations System** (not a chatbot), combining:
+An end-to-end **support operations routing system** that combines deterministic rules, calibrated ML classifiers, and LLM fallback to route tickets into operational queues with human-safe escalation.
 
-1. Real customer-support conversations (Twitter)
-2. Large-scale structured support tickets (200K+)
-3. LLM-powered summarization and reasoning for routing fallback
+This repository is designed as a portfolio-grade, interview-ready project for **Business Data Scientist / gDATA-style** roles: it emphasizes measurable lift over baselines, operating-threshold tradeoffs, and cost-aware decisioning.
 
-It implements a production-style multi-stage routing design:
+---
+
+## Why this project is credible
+
+This implementation now includes capabilities that are often missing in portfolio projects:
+
+- **Inbound-only customer training data** from Twitter (agent messages filtered out).
+- **Real label extraction** from structured ticket fields (`Ticket Type`, `Ticket Priority`) instead of pure synthetic heuristics.
+- **Baseline comparison**: ML vs keyword heuristic on a labeled eval set.
+- **Confidence-threshold sweep** to expose coverage/cost/human-escalation tradeoffs.
+- **Calibrated confidence scores** (isotonic calibration) for routing thresholds.
+- **Batched model inference** for routing throughput efficiency.
+- **LLM failure safety**: classification parse/API failures fall back to `human_triage_queue`.
+
+---
+
+## System architecture
 
 ```text
-Rule-based (high confidence patterns)
-      ↓
-ML classifier (default routing)
-      ↓
+Rule-based exact patterns (fast path)
+          ↓
+ML classifier (high-confidence auto-route)
+          ↓
 LLM reasoning (low-confidence cases)
-      ↓
-Human fallback
+          ↓
+Human triage (uncertain or LLM-unavailable)
 ```
 
----
+### Routing stages
 
-## 1) Datasets
+1. **Rule-based**: deterministic patterns in `RULE_PATTERNS`.
+2. **ML high-confidence**: TF-IDF + Logistic Regression (calibrated) routes automatically when confidence ≥ high threshold.
+3. **LLM reasoning**: low-confidence cases use LLM JSON classification.
+4. **Human fallback**: middle-confidence ambiguity and LLM failures route to human queue.
 
-### A. Customer Support on Twitter (real interactions)
-- Kaggle slug used in code: `thoughtvector/customer-support-on-twitter`
-- Purpose: real-world conversational language, noisy text, social support patterns
-
-### B. Customer Support Tickets Dataset (200K+)
-- Kaggle slug used in code: `suraj520/customer-support-ticket-dataset`
-- Purpose: large-scale structured tickets for classification/routing training
-
-### C. TWEETSUMM (for conversation summarization)
-- You can add this as a third source in the same ingestion pattern.
-- In this implementation, summarization is handled by LLM functions (`llm.py`) so you can plug TWEETSUMM in supervised fine-tuning later.
-
-> Note: Kaggle API credentials are required to auto-download datasets.
+Urgency can append `_priority` to queues (e.g., `billing_queue_priority`) when urgency is `high`/`critical`.
 
 ---
 
-## 2) System Architecture
+## Data sources
 
-### Core modules
+### 1) Customer Support on Twitter (Kaggle)
+- Slug: `thoughtvector/customer-support-on-twitter`
+- Used for real customer language in noisy conversational format.
+- **Only inbound customer-authored messages are retained**.
+
+### 2) Customer Support Ticket Dataset (Kaggle)
+- Slug: `suraj520/customer-support-ticket-dataset`
+- Used for large-scale ticket text + structured metadata.
+- `Ticket Type` is mapped to issue-type labels.
+- `Ticket Priority` is mapped to urgency labels.
+
+---
+
+## Project structure
+
 - `src/llm_support_routing/data.py`  
-  Data download, loading, and unified table construction.
+  Ingestion, Kaggle download, unified schema, inbound filtering, structured-label mapping.
 
 - `src/llm_support_routing/features.py`  
-  Text normalization + weak-label generation for:
-  - issue type (`billing`, `ads`, `login`, `technical`, `account`, `other`)
-  - urgency (`low`, `medium`, `high`, `critical`)
-  - complexity (`low`, `medium`, `high`)
+  Text normalization and label generation with **real-label-first + keyword fallback** strategy.
 
 - `src/llm_support_routing/models.py`  
-  Baseline classifier:
-  - **TF-IDF + Logistic Regression**
+  TF-IDF + Logistic Regression training, isotonic calibration, CV diagnostics, inference helpers.
 
 - `src/llm_support_routing/routing.py`  
-  Main routing logic with four stages:
-  - rule-based
-  - ML high-confidence
-  - LLM reasoning (low confidence)
-  - human fallback
+  Cascade routing engine (`rule -> ml -> llm -> human`), urgency suffixing, batched routing API.
 
 - `src/llm_support_routing/llm.py`  
-  LLM tasks:
-  - few-shot style classification
-  - ticket summarization
-  - resolution path + escalation judgement
+  LLM classification/summarization utilities with resilient JSON parsing and error sentinel behavior.
 
 - `src/llm_support_routing/evaluation.py`  
-  KPIs:
-  - escalation rate
-  - LLM invocation rate
-  - estimated cost per ticket
+  Routing KPI computation, labeled-set evaluation vs keyword baseline, confidence threshold sweep.
 
 - `scripts/run_pipeline.py`  
-  End-to-end pipeline runner.
+  End-to-end run: load → unify → label → train 3 classifiers (issue/urgency/complexity) → evaluate → route → export artifacts.
+
+- `scripts/train_distilbert.py`  
+  Optional DistilBERT fine-tuning path for issue-type classification.
 
 - `app.py`  
-  Streamlit dashboard:
-  - routing flow chart
-  - route distribution
-  - confidence distribution
-  - key metrics
+  Streamlit dashboard for KPI tracking, stage/queue analysis, threshold tradeoffs, and live routing demo.
 
 ---
 
-## 3) Environment Setup
+## Quick start
 
-## Option A: pip
+### 1) Install
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
@@ -98,94 +102,104 @@ pip install -U pip
 pip install -e .
 ```
 
-### Kaggle API (for dataset download)
-Set credentials:
+### 2) Configure environment
+
 ```bash
 export KAGGLE_USERNAME="your_username"
 export KAGGLE_KEY="your_key"
-```
 
-### OpenAI API (for LLM fallback/summarization)
-```bash
 export OPENAI_API_KEY="your_openai_key"
 export OPENAI_MODEL="gpt-4.1-mini"
 ```
 
----
+### 3) Run pipeline
 
-## 4) Run End-to-End Pipeline
-
-### Download + train + route + evaluate
 ```bash
 python scripts/run_pipeline.py --download
 ```
 
-Generated artifacts:
+If data is already present locally, run without `--download`.
+
+---
+
+## Artifacts generated
+
+After pipeline execution:
+
 - `data/processed/unified_labeled_tickets.csv`
 - `models/issue_type_tfidf_lr.joblib`
+- `models/urgency_tfidf_lr.joblib`
+- `models/complexity_tfidf_lr.joblib`
 - `outputs/routed_tickets.csv`
 - `outputs/routing_metrics.csv`
+- `outputs/threshold_sweep.csv`
+- `outputs/eval_comparison.csv` (if eval set exists)
 - `outputs/training_report.txt`
 
 ---
 
-## 5) Launch Dashboard
+## Evaluation methodology
+
+### A) Held-out + cross-validation (during training)
+For each target (`issue_type`, `urgency`, `complexity`):
+- Held-out accuracy from train/test split
+- 5-fold CV mean ± std
+
+### B) ML vs keyword baseline on labeled eval set
+If `data/eval/eval_tickets.csv` exists, pipeline reports:
+- `ml_accuracy`
+- `keyword_baseline_accuracy`
+- `ml_lift_over_baseline`
+- classification reports for both
+
+This directly answers: **Does ML add signal over hand-written keywords?**
+
+### C) Confidence threshold sweep
+Generates operating curve over thresholds (0.50 to 0.95):
+- auto-routed rate
+- estimated LLM fallback rate
+- estimated human fallback rate
+- estimated cost/ticket
+
+This supports business decisions around cost vs automation coverage vs risk.
+
+---
+
+## Dashboard
+
+Launch:
 
 ```bash
 streamlit run app.py
 ```
 
 Dashboard includes:
-- routing flow visualization (stage → queue)
-- accuracy-related proxy outputs (via saved report + routing metrics)
-- escalation rate
-- cost per ticket
+- KPI cards (`tickets`, `escalation_rate`, `llm_invocation_rate`, confidence, cost)
+- Stage and queue distributions
+- Urgency distribution
+- Confidence histograms by stage
+- Stage→queue flow view
+- Threshold sweep charts (coverage and cost)
+- Interactive “Route a Ticket” demo
 
 ---
 
-## 6) Baseline, Advanced, and LLM Layers
+## Interview framing (Google BDS / gDATA style)
 
-### Baseline (implemented)
-- TF-IDF + Logistic Regression (issue type)
+Use this project to show end-to-end product analytics + ML judgment:
 
-### Advanced (extension plan)
-- DistilBERT / BERT fine-tuning for issue type, urgency, complexity
-- Replace/augment weak labels with human annotations
-
-### LLM layer (implemented)
-- Low-confidence ticket reasoning
-- Automatic ticket summary
-- Suggested resolution path + escalation decision
+1. **Business problem framing**: reduce triage time and wrong-queue handoffs while controlling LLM cost.
+2. **Measurement discipline**: compare against keyword baseline, not just absolute model accuracy.
+3. **Operational tuning**: use threshold sweeps to set policy based on queue capacity and SLA.
+4. **Reliability mindset**: LLM parse/API failures fail safely to human triage.
+5. **Scalability awareness**: batch ML inference and separate deterministic/risky paths.
 
 ---
 
-## 7) Production Notes
+## Next high-ROI improvements
 
-- Keep confidence thresholds configurable (`RoutingThresholds` in `config.py`)
-- Add monitoring by queue, language, and customer segment
-- Add human-in-the-loop review for LLM outputs
-- Validate synthetic-trained components on real ticket traffic before production rollout
-
----
-
-## 8) Suggested Next Steps
-
-1. Add TWEETSUMM ingestion and ROUGE/BERTScore evaluation for summarization.
-2. Train separate classifiers for urgency and complexity.
-3. Add calibration curves and confidence-based SLA policies.
-4. Add per-queue capacity-aware routing (workload balancing).
-5. Add model registry and CI/CD for retraining.
-
----
-
-## 9) Quick Demo Without Download
-
-If Kaggle API is unavailable, place CSVs manually:
-- `data/raw/twitter_support/*.csv`
-- `data/raw/support_tickets/*.csv`
-
-Then run:
-```bash
-python scripts/run_pipeline.py
-```
-
+1. Build queue-level precision/recall and confusion matrices on a larger hand-labeled eval set.
+2. Add calibration/reliability plots to complement threshold tuning.
+3. Add SLA-aware threshold policies by queue (e.g., stricter for high-risk queues).
+4. Persist model/data version metadata with each pipeline run for reproducibility.
+5. Add latency benchmarks (per 1k tickets) for rule-only vs ML vs ML+LLM modes.
