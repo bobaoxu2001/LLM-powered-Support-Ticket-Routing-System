@@ -15,7 +15,7 @@ This implementation now includes capabilities that are often missing in portfoli
 - **Inbound-only customer training data** from Twitter (agent messages filtered out).
 - **Real label extraction** from structured ticket fields (`Ticket Type`, `Ticket Priority`) instead of pure synthetic heuristics.
 - **Baseline comparison**: ML vs keyword heuristic on a labeled eval set.
-- **Confidence-threshold sweep with recommendation score** to expose coverage/cost/human-escalation tradeoffs.
+- **Confidence-threshold sweep** to expose coverage/cost/human-escalation tradeoffs.
 - **Calibrated confidence scores** (isotonic calibration) for routing thresholds.
 - **Batched model inference** for routing throughput efficiency.
 - **LLM failure safety**: classification parse/API failures fall back to `human_triage_queue`.
@@ -133,10 +133,7 @@ After pipeline execution:
 - `outputs/routed_tickets.csv`
 - `outputs/routing_metrics.csv`
 - `outputs/threshold_sweep.csv`
-- `outputs/eval_comparison.csv` (measured eval summary; if eval set exists)
-- `outputs/eval_per_class_metrics.csv` (measured per-class precision/recall/F1)
-- `outputs/eval_confusion_matrix.csv` (measured confusion-matrix counts)
-- `outputs/routing_policy_recommendation.csv` (estimated operating-point recommendation)
+- `outputs/eval_comparison.csv` (if eval set exists)
 - `outputs/training_report.txt`
 
 ---
@@ -148,33 +145,25 @@ For each target (`issue_type`, `urgency`, `complexity`):
 - Held-out accuracy from train/test split
 - 5-fold CV mean ± std
 
-### B) ML vs keyword baseline on labeled eval set (**measured**)
+### B) ML vs keyword baseline on labeled eval set
 If `data/eval/eval_tickets.csv` exists, pipeline reports:
-- accuracy and macro/weighted F1 for ML and keyword baseline
-- lift metrics (ML minus baseline)
-- per-class metrics table (`eval_per_class_metrics.csv`)
-- confusion-matrix table (`eval_confusion_matrix.csv`)
+- `ml_accuracy`
+- `keyword_baseline_accuracy`
+- `ml_lift_over_baseline`
+- classification reports for both
 
-This directly answers: **Does ML add signal over hand-written keywords?** and makes class-level tradeoffs inspectable.
+This directly answers: **Does ML add signal over hand-written keywords?**
 
-If the eval set is not present, the pipeline skips this block and removes stale eval CSVs from prior runs to avoid misleading dashboards.
-
-### C) Confidence threshold sweep (**estimated**)
+### C) Confidence threshold sweep
 Generates operating curve over thresholds (0.50 to 0.95):
-- auto-routed rate (estimated)
+- auto-routed rate
 - estimated LLM fallback rate
 - estimated human fallback rate
 - estimated cost/ticket
-- recommendation score + suggested operating point
 
-This supports business decisions around cost vs automation coverage vs risk while clearly separating measured vs estimated metrics.
+This supports business decisions around cost vs automation coverage vs risk.
 
 ---
-
-
-### D) Metric semantics cheat sheet
-- **Measured**: values computed from labeled ground truth (e.g., `ml_macro_f1` in `eval_comparison.csv`).
-- **Estimated**: values derived from assumptions/confidence distributions (e.g., `cost_per_ticket_usd_estimated` in `threshold_sweep.csv` / `routing_metrics.csv`).
 
 ## Dashboard
 
@@ -190,12 +179,10 @@ Dashboard includes:
 - Urgency distribution
 - Confidence histograms by stage
 - Stage→queue flow view
-- Threshold sweep charts (estimated coverage and cost)
-- Suggested threshold recommendation for policy discussion
-- Measured eval summary + per-class metrics + confusion matrix heatmap
+- Threshold sweep charts (coverage and cost)
 - Interactive “Route a Ticket” demo
 
----
+## Dashboard
 
 ## Interview framing (Google BDS / gDATA style)
 

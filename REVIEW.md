@@ -13,7 +13,7 @@ Compared with earlier iterations, the current code now demonstrates:
 
 - Better **data integrity** (inbound-only customer messages; dedup logic that preserves real labels).
 - Better **label realism** (structured ticket fields mapped into issue/urgency labels).
-- Better **evaluation credibility** (explicit ML vs keyword baseline on a labeled eval set, with per-class metrics and confusion-matrix artifacts).
+- Better **evaluation credibility** (explicit ML vs keyword baseline on a labeled eval set).
 - Better **operational tuning** (threshold sweep for cost/coverage/human-fallback tradeoffs).
 - Better **runtime robustness** (LLM parse/API failure safe fallback to human triage).
 - Better **engineering maturity** (batched ML routing path, focused unit tests).
@@ -48,8 +48,7 @@ The 4-stage cascade (`rule → ML → LLM → human`) is implemented coherently.
 
 - Pipeline computes held-out accuracy and 5-fold CV per label dimension.
 - Includes direct ML-vs-keyword baseline comparison on a labeled eval set.
-- Produces threshold sweep + recommendation artifact quantifying estimated auto-route, LLM fallback, human fallback, and cost tradeoffs.
-- Avoids stale reporting by clearing eval artifacts when no labeled eval set is available in a run.
+- Produces threshold sweep artifact quantifying auto-route rate, LLM fallback, human fallback, and estimated cost.
 
 **Why this matters:** this is the core question for BDS roles — “what incremental business value does ML add?”
 
@@ -72,13 +71,12 @@ Current eval dataset is useful but small. Add a larger hand-labeled sample (e.g.
 
 ### Priority 2 — Calibration evidence in artifacts
 
-Model calibration is implemented, but reliability-curve artifacts are still missing.
+Model calibration is implemented, but there is no reliability-curve artifact in outputs/dashboard.
 Add calibration plots to validate threshold semantics and improve trust in operational gating.
 
 ### Priority 3 — Business impact accounting
 
-The repo now separates **measured eval metrics** and **estimated routing-policy metrics**, which is a strong step.
-Next, increase rigor by logging:
+Cost estimation is directionally useful; increase rigor by logging:
 - token usage distribution by stage,
 - empirical latency (p50/p95),
 - queue handoff reduction vs baseline policy.
