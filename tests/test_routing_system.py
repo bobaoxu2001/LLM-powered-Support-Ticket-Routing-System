@@ -106,6 +106,22 @@ def test_build_twitter_rows_are_weak():
     assert (twitter_rows["label_source"] == "weak").all()
 
 
+def test_build_real_label_wins_dedup_over_weak():
+    """When the same description exists in both sources, the real-labeled row wins."""
+    shared_text = "I was charged twice for my subscription"
+    twitter = pd.DataFrame([{"text": shared_text, "inbound": True}])
+    tickets = pd.DataFrame([{
+        "Ticket Subject": shared_text,
+        "Ticket Description": shared_text,
+        "Ticket Type": "Billing inquiry",
+        "Ticket Priority": "High",
+    }])
+    unified = build_unified_ticket_table(twitter, tickets)
+    matching = unified[unified["description"] == shared_text]
+    assert len(matching) == 1
+    assert matching.iloc[0]["label_source"] == "real"
+
+
 # ── add_weak_labels ───────────────────────────────────────────────────────────
 
 def _df(text: str, category: str = "", priority: str = "", label_source: str = "weak") -> pd.DataFrame:
@@ -118,6 +134,20 @@ def _df(text: str, category: str = "", priority: str = "", label_source: str = "
 def test_weak_label_uses_real_category():
     row = add_weak_labels(_df("some unrelated text", category="billing", label_source="real"))
     assert row.iloc[0]["issue_type"] == "billing"
+
+
+def test_weak_label_ignores_other_when_label_source_is_weak():
+    """Unmapped ticket types fall back to keyword, not hard 'other' (Codex P2 fix)."""
+    # category='other' + label_source='weak' means _map_structured_tickets couldn't map
+    # the ticket type — keyword fallback should run, not lock in 'other'.
+    row = add_weak_labels(_df("I need a refund for my bill", category="other", label_source="weak"))
+    assert row.iloc[0]["issue_type"] == "billing"  # keyword wins over spurious 'other'
+
+
+def test_weak_label_ignores_priority_when_label_source_is_weak():
+    """A priority value with label_source='weak' must not override keyword urgency."""
+    row = add_weak_labels(_df("I need this fixed asap", priority="low", label_source="weak"))
+    assert row.iloc[0]["urgency"] == "high"  # keyword wins over spurious 'low'
 
 
 def test_weak_label_uses_real_priority():

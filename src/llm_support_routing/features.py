@@ -74,13 +74,18 @@ def add_weak_labels(df: pd.DataFrame) -> pd.DataFrame:
     real_priority = out.get("priority", pd.Series("", index=out.index)).fillna("")
     label_source = out.get("label_source", pd.Series("weak", index=out.index)).fillna("weak")
 
-    # issue_type: prefer real label, fall back to keyword
-    issue_type = real_category.where(real_category.isin(_VALID_ISSUE_TYPES), other=None)
+    # issue_type: use real label only when label_source='real' AND category is a known
+    # type.  Without the label_source guard, unmapped ticket types that _map_structured_tickets
+    # falls back to 'other' (with label_source='weak') would be treated as confirmed 'other'
+    # labels and bypass keyword fallback, injecting systematic noise into training.
+    is_real_issue = (label_source == "real") & real_category.isin(_VALID_ISSUE_TYPES)
+    issue_type = real_category.where(is_real_issue, other=None)
     keyword_fallback = out["text"].map(_keyword_issue_type)
     out["issue_type"] = issue_type.combine_first(keyword_fallback)
 
-    # urgency: prefer real label, fall back to keyword
-    urgency = real_priority.where(real_priority.isin(_VALID_URGENCY), other=None)
+    # urgency: same guard — only trust priority when label_source='real'
+    is_real_urgency = (label_source == "real") & real_priority.isin(_VALID_URGENCY)
+    urgency = real_priority.where(is_real_urgency, other=None)
     urgency_fallback = out["text"].map(_keyword_urgency)
     out["urgency"] = urgency.combine_first(urgency_fallback)
 

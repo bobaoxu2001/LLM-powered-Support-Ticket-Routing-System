@@ -161,5 +161,12 @@ def build_unified_ticket_table(
 
     unified = pd.concat([_select(twitter_df), _select(tickets_df)], ignore_index=True)
     unified = unified.dropna(subset=["description"]).reset_index(drop=True)
-    unified = unified.drop_duplicates(subset=["description"]).reset_index(drop=True)
+    # Sort so real-labeled rows come first before deduplication on description.
+    # Without this, a weak Twitter row appearing before the same text in the
+    # structured dataset would win the keep="first" and the real label would be
+    # silently dropped, reducing ground-truth coverage.
+    unified = unified.sort_values(
+        "label_source", key=lambda s: s.map({"real": 0, "weak": 1}), kind="stable"
+    )
+    unified = unified.drop_duplicates(subset=["description"], keep="first").reset_index(drop=True)
     return unified
