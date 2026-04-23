@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-import pandas as pd
+from pathlib import Path
 
+import pandas as pd
+from sklearn.metrics import accuracy_score, classification_report
+
+from .features import _keyword_issue_type, normalize_text
 from .models import predict_with_confidence
 
 # GPT-4.1-mini pricing (2025): $0.40/1M input tokens, $1.60/1M output tokens.
@@ -41,13 +45,53 @@ def routing_metrics(routed_df: pd.DataFrame) -> dict[str, float]:
     return metrics
 
 
+def evaluate_on_labeled_set(model, eval_path: Path) -> dict[str, object]:
+    """Compare ML classifier against keyword-rule baseline on a labeled eval set.
+
+    This is the core measurement that answers: does the ML model add signal
+    beyond the keyword heuristics it was trained to approximate?
+
+    Returns a dict with:
+      - ml_accuracy, keyword_baseline_accuracy, ml_lift
+      - per-class classification reports for both
+      - label composition (how many real vs weak labels in the eval set)
+    """
+    eval_df = pd.read_csv(eval_path)
+    if "text" not in eval_df.columns:
+        eval_df["text"] = (
+            eval_df.get("subject", pd.Series("", index=eval_df.index)).fillna("") + " " +
+            eval_df.get("description", pd.Series("", index=eval_df.index)).fillna("")
+        )
+    eval_df["text"] = eval_df["text"].astype(str).map(normalize_text)
+
+    true_labels = eval_df["issue_type"].tolist()
+
+    # ML model predictions
+    ml_preds, _ = predict_with_confidence(model, eval_df["text"].tolist())
+
+    # Keyword-rule baseline predictions (same heuristic as add_weak_labels)
+    keyword_preds = [_keyword_issue_type(t) for t in eval_df["text"].tolist()]
+
+    ml_acc = float(accuracy_score(true_labels, ml_preds))
+    kw_acc = float(accuracy_score(true_labels, keyword_preds))
+
+    return {
+        "n_eval_samples": len(eval_df),
+        "ml_accuracy": ml_acc,
+        "keyword_baseline_accuracy": kw_acc,
+        "ml_lift_over_baseline": ml_acc - kw_acc,
+        "ml_report": classification_report(true_labels, ml_preds, zero_division=0),
+        "keyword_report": classification_report(true_labels, keyword_preds, zero_division=0),
+    }
+
+
 def threshold_sweep(texts: list[str], model) -> pd.DataFrame:
     """Sweep the high-confidence threshold from 0.50 to 0.95 using ML predictions only.
 
     For each threshold value reports the auto-route rate (ML stage), the estimated
-    LLM fallback rate (low-confidence band, using low = threshold * 0.65), the
+    LLM fallback rate (low-confidence band using low = threshold * 0.65), the
     average confidence of auto-routed tickets, and the resulting estimated cost
-    per ticket. Use this to pick an operating point on the cost-coverage curve.
+    per ticket.  Use this to pick an operating point on the cost-coverage curve.
     """
     _, probs = predict_with_confidence(model, texts)
     rows = []

@@ -11,8 +11,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from llm_support_routing.config import RULE_PATTERNS
+from llm_support_routing.data import TICKET_PRIORITY_MAP, TICKET_TYPE_MAP, build_unified_ticket_table
 from llm_support_routing.evaluation import routing_metrics, threshold_sweep
-from llm_support_routing.features import add_weak_labels, normalize_text
+from llm_support_routing.features import _keyword_issue_type, add_weak_labels, normalize_text
 from llm_support_routing.routing import RULE_ROUTING, _apply_urgency_suffix, _rule_match, route_ticket
 
 
@@ -30,14 +31,103 @@ def test_normalize_removes_punctuation():
     assert "!" not in normalize_text("help me!")
 
 
+# ── TICKET_TYPE_MAP / TICKET_PRIORITY_MAP coverage ───────────────────────────
+
+def test_ticket_type_map_billing_variants():
+    assert TICKET_TYPE_MAP["billing inquiry"] == "billing"
+    assert TICKET_TYPE_MAP["refund request"] == "billing"
+    assert TICKET_TYPE_MAP["cancellation request"] == "billing"
+
+
+def test_ticket_type_map_technical_variants():
+    assert TICKET_TYPE_MAP["technical issue"] == "technical"
+    assert TICKET_TYPE_MAP["software bug"] == "technical"
+    assert TICKET_TYPE_MAP["network problem"] == "technical"
+
+
+def test_ticket_priority_map_all_levels():
+    for level in ("critical", "high", "medium", "low"):
+        assert TICKET_PRIORITY_MAP[level] == level
+
+
+# ── build_unified_ticket_table ────────────────────────────────────────────────
+
+def _make_twitter() -> pd.DataFrame:
+    return pd.DataFrame([
+        {"text": "My payment was doubled", "inbound": True},
+        {"text": "Thank you for contacting us", "inbound": False},  # agent — should be filtered
+    ])
+
+
+def _make_tickets() -> pd.DataFrame:
+    return pd.DataFrame([
+        {
+            "Ticket Subject": "Billing problem",
+            "Ticket Description": "I was charged twice",
+            "Ticket Type": "Billing inquiry",
+            "Ticket Priority": "High",
+        },
+        {
+            "Ticket Subject": "Login issue",
+            "Ticket Description": "Cannot log in to my account",
+            "Ticket Type": "Login issue",
+            "Ticket Priority": "Medium",
+        },
+    ])
+
+
+def test_build_filters_agent_messages():
+    unified = build_unified_ticket_table(_make_twitter(), _make_tickets())
+    assert not any("Thank you for contacting us" in str(d) for d in unified["description"])
+
+
+def test_build_extracts_real_ticket_type():
+    unified = build_unified_ticket_table(_make_twitter(), _make_tickets())
+    structured = unified[unified["source"] == "structured_tickets"]
+    # Billing inquiry → billing
+    assert "billing" in structured["category"].values
+
+
+def test_build_extracts_real_priority():
+    unified = build_unified_ticket_table(_make_twitter(), _make_tickets())
+    structured = unified[unified["source"] == "structured_tickets"]
+    assert "high" in structured["priority"].values
+
+
+def test_build_label_source_column():
+    unified = build_unified_ticket_table(_make_twitter(), _make_tickets())
+    assert "label_source" in unified.columns
+    assert set(unified["label_source"].unique()).issubset({"real", "weak"})
+
+
+def test_build_twitter_rows_are_weak():
+    unified = build_unified_ticket_table(_make_twitter(), _make_tickets())
+    twitter_rows = unified[unified["source"] == "twitter_support"]
+    assert (twitter_rows["label_source"] == "weak").all()
+
+
 # ── add_weak_labels ───────────────────────────────────────────────────────────
 
-def _df(text: str) -> pd.DataFrame:
-    return pd.DataFrame([{"subject": text, "description": ""}])
+def _df(text: str, category: str = "", priority: str = "", label_source: str = "weak") -> pd.DataFrame:
+    return pd.DataFrame([{
+        "subject": text, "description": "", "category": category,
+        "priority": priority, "label_source": label_source,
+    }])
 
 
-def test_weak_label_billing():
-    assert add_weak_labels(_df("I need a refund for my bill")).iloc[0]["issue_type"] == "billing"
+def test_weak_label_uses_real_category():
+    row = add_weak_labels(_df("some unrelated text", category="billing", label_source="real"))
+    assert row.iloc[0]["issue_type"] == "billing"
+
+
+def test_weak_label_uses_real_priority():
+    row = add_weak_labels(_df("some text", priority="critical", label_source="real"))
+    assert row.iloc[0]["urgency"] == "critical"
+
+
+def test_weak_label_falls_back_to_keyword_for_twitter():
+    row = add_weak_labels(_df("I need a refund for my bill", label_source="weak"))
+    assert row.iloc[0]["issue_type"] == "billing"
 
 
 def test_weak_label_login():
@@ -45,7 +135,7 @@ def test_weak_label_login():
 
 
 def test_weak_label_technical():
-    assert add_weak_labels(_df("The app keeps crashing with an error")).iloc[0]["issue_type"] == "technical"
+    assert add_weak_labels(_df("The app keeps crashing")).iloc[0]["issue_type"] == "technical"
 
 
 def test_weak_label_urgency_high():
@@ -60,18 +150,31 @@ def test_weak_label_complexity_low():
     assert add_weak_labels(_df("short text")).iloc[0]["complexity"] == "low"
 
 
+def test_weak_label_label_quality_column():
+    row = add_weak_labels(_df("some text", category="billing", label_source="real"))
+    assert row.iloc[0]["label_quality"] == "real"
+
+
+# ── keyword baseline ──────────────────────────────────────────────────────────
+
+def test_keyword_baseline_billing():
+    assert _keyword_issue_type("i need a refund for my bill") == "billing"
+
+
+def test_keyword_baseline_other_for_ambiguous():
+    assert _keyword_issue_type("i have a question") == "other"
+
+
 # ── rule engine ───────────────────────────────────────────────────────────────
 
 def test_rule_match_refund():
     result = _rule_match("i need a refund please")
-    assert result is not None
-    assert result[0] == "billing_queue"
+    assert result is not None and result[0] == "billing_queue"
 
 
 def test_rule_match_account_locked():
     result = _rule_match("my account locked and i cannot get in")
-    assert result is not None
-    assert result[0] == "identity_support_queue"
+    assert result is not None and result[0] == "identity_support_queue"
 
 
 def test_rule_match_no_match():
@@ -133,26 +236,47 @@ def test_routing_metrics_stage_rates():
 # ── threshold_sweep ───────────────────────────────────────────────────────────
 
 def _mock_model_for_sweep(probs: list[float]):
-    labels = np.array(["billing"] * len(probs))
-    prob_matrix = np.array([[p] for p in probs])
     model = MagicMock()
-    model.predict.return_value = labels
-    model.predict_proba.return_value = prob_matrix
+    model.predict.return_value = np.array(["billing"] * len(probs))
+    model.predict_proba.return_value = np.array([[p] for p in probs])
     return model
 
 
 def test_threshold_sweep_returns_10_rows():
-    model = _mock_model_for_sweep([0.3, 0.6, 0.9] * 10)
-    sweep = threshold_sweep(["text"] * 30, model)
+    sweep = threshold_sweep(["text"] * 30, _mock_model_for_sweep([0.3, 0.6, 0.9] * 10))
     assert len(sweep) == 10
 
 
 def test_threshold_sweep_columns():
-    model = _mock_model_for_sweep([0.5] * 5)
-    cols = threshold_sweep(["text"] * 5, model).columns.tolist()
+    cols = threshold_sweep(["text"] * 5, _mock_model_for_sweep([0.5] * 5)).columns.tolist()
     assert "auto_routed_rate" in cols
     assert "llm_fallback_rate" in cols
     assert "est_cost_per_ticket_usd" in cols
+
+
+# ── evaluate_on_labeled_set ───────────────────────────────────────────────────
+
+def test_evaluate_on_labeled_set_keys():
+    from llm_support_routing.evaluation import evaluate_on_labeled_set
+    import tempfile, os
+
+    # Write a tiny labeled CSV
+    csv = "text,issue_type\nbill charge refund,billing\npassword login,login\nerror crash bug,technical\n"
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".csv", delete=False) as f:
+        f.write(csv)
+        tmp = Path(f.name)
+
+    model = MagicMock()
+    model.predict.return_value = np.array(["billing", "login", "technical"])
+    model.predict_proba.return_value = np.array([[0.9], [0.8], [0.85]])
+
+    result = evaluate_on_labeled_set(model, tmp)
+    tmp.unlink()
+
+    assert "ml_accuracy" in result
+    assert "keyword_baseline_accuracy" in result
+    assert "ml_lift_over_baseline" in result
+    assert result["n_eval_samples"] == 3
 
 
 # ── route_ticket ──────────────────────────────────────────────────────────────
@@ -166,26 +290,22 @@ def _mock_model(label: str = "billing", prob: float = 0.95):
 
 def test_route_ticket_rule_based_refund():
     decision = route_ticket("I need a refund please", _mock_model())
-    assert decision.stage == "rule_based"
-    assert decision.route == "billing_queue"
+    assert decision.stage == "rule_based" and decision.route == "billing_queue"
 
 
 def test_route_ticket_rule_based_account_locked():
     decision = route_ticket("My account locked and I can't get in", _mock_model())
-    assert decision.stage == "rule_based"
-    assert decision.route == "identity_support_queue"
+    assert decision.stage == "rule_based" and decision.route == "identity_support_queue"
 
 
 def test_route_ticket_ml_high_confidence():
     decision = route_ticket("The app keeps crashing", _mock_model(label="technical", prob=0.92))
-    assert decision.stage == "ml_high_confidence"
-    assert decision.route == "technical_support_queue"
+    assert decision.stage == "ml_high_confidence" and decision.route == "technical_support_queue"
 
 
 def test_route_ticket_human_fallback():
     decision = route_ticket("I have a general question", _mock_model(label="other", prob=0.70))
-    assert decision.stage == "human_fallback"
-    assert decision.route == "human_triage_queue"
+    assert decision.stage == "human_fallback" and decision.route == "human_triage_queue"
 
 
 def test_route_ticket_urgency_suffix():
@@ -201,10 +321,11 @@ def test_route_ticket_urgency_suffix():
 @patch("llm_support_routing.routing.llm_classify_ticket")
 def test_route_ticket_llm_reasoning(mock_llm):
     mock_llm.return_value = {"issue_type": "ads", "urgency": "high", "complexity": "low"}
-    # Text avoids all RULE_PATTERNS so routing falls through to the LLM band
-    decision = route_ticket("My marketing spend keeps increasing unexpectedly", _mock_model(label="other", prob=0.40))
-    assert decision.stage == "llm_reasoning"
-    assert "ads_ops_queue" in decision.route
+    decision = route_ticket(
+        "My marketing spend keeps increasing unexpectedly",
+        _mock_model(label="other", prob=0.40),
+    )
+    assert decision.stage == "llm_reasoning" and "ads_ops_queue" in decision.route
     mock_llm.assert_called_once()
 
 
@@ -212,5 +333,4 @@ def test_route_ticket_llm_reasoning(mock_llm):
 def test_route_ticket_llm_error_escalates_to_human(mock_llm):
     mock_llm.return_value = {"issue_type": "other", "urgency": "low", "complexity": "low", "_llm_error": "timeout"}
     decision = route_ticket("Strange request", _mock_model(label="other", prob=0.40))
-    assert decision.stage == "human_fallback"
-    assert decision.route == "human_triage_queue"
+    assert decision.stage == "human_fallback" and decision.route == "human_triage_queue"
