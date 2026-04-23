@@ -1,0 +1,100 @@
+text,issue_type,urgency
+"I was charged twice for my monthly subscription. Please refund the duplicate charge as soon as possible.",billing,high
+"My credit card was billed for a plan I cancelled three months ago. This is the second unauthorized charge.",billing,high
+"I need an urgent refund. Your system charged me $200 instead of $20 due to a pricing error.",billing,high
+"Double charge on my account today. Transaction ID 884422. Need this reversed immediately.",billing,high
+"I received an invoice for a service I never signed up for. Please investigate and refund.",billing,medium
+"Can you send me a copy of my invoice for last quarter? I need it for tax purposes.",billing,low
+"What payment methods do you accept? I would like to switch from credit card to bank transfer.",billing,low
+"My billing cycle changed from the 1st to the 15th without my consent. Please explain.",billing,medium
+"I was offered a 20% discount but my invoice shows full price. Can you correct this?",billing,medium
+"How do I upgrade my plan? I want to understand the price difference before committing.",billing,low
+"The refund I requested two weeks ago has not appeared on my statement yet.",billing,medium
+"I closed my account but was still charged for the next month. Please issue a refund.",billing,high
+"Your website shows $9.99/month but I was billed $14.99. Please correct the charge.",billing,medium
+"I would like to request a prorated refund for the unused portion of my subscription.",billing,medium
+"My payment failed but I was still charged. Now I have no access and lost money.",billing,high
+"Can I get a receipt for my last three payments? My accountant needs documentation.",billing,low
+"I accidentally purchased the wrong plan. Can I get a refund and switch to the correct one?",billing,medium
+"I cannot log into my account. I tried resetting my password but the email never arrives.",login,high
+"My account is locked after too many failed attempts. I need access restored urgently for work.",login,high
+"Two-factor authentication is not sending the verification code to my phone.",login,high
+"I changed my email address and now I cannot log in with either the old or new email.",login,high
+"My account was compromised and someone changed my password. I need immediate access recovery.",login,high
+"I forgot my password. The reset link I receive says it is expired before I can click it.",login,medium
+"I use Google sign-in but the login button is returning an error today.",login,medium
+"My session keeps timing out every 10 minutes even though I select remember me.",login,medium
+"I received a security alert about a login from an unrecognized device. Please help me secure my account.",login,high
+"How do I enable two-factor authentication on my account?",login,low
+"Can I log in from multiple devices simultaneously or is there a device limit?",login,low
+"I signed up with Facebook but I want to switch to email login. How do I do this?",login,low
+"After the app update yesterday I cannot log in on my iPhone. Android works fine.",login,medium
+"My password manager autofills my credentials but the site keeps saying they are incorrect.",login,medium
+"I deleted the authenticator app by mistake and cannot generate 2FA codes anymore.",login,high
+"The login page is not loading at all on Chrome. I tried clearing cache but it did not help.",login,medium
+"I was logged out of all devices suddenly. Is there a security incident on your end?",login,high
+"The application crashes every time I try to open the dashboard. This started after the update.",technical,high
+"Your API is returning 500 errors for all requests since 2am. Our entire production system is down.",technical,high
+"All user data disappeared from my account after I tried to export it. Complete data loss.",technical,high
+"The file upload feature is completely broken. I cannot upload any documents.",technical,high
+"Your service has been unavailable for the past 3 hours. My team cannot do any work.",technical,high
+"The mobile app freezes on the home screen on iOS 17. Other iOS versions work fine.",technical,medium
+"Charts are not rendering correctly in Firefox. They display fine in Chrome.",technical,medium
+"The export to CSV feature produces corrupted files. The data is garbled.",technical,medium
+"Search results are returning incorrect items. It looks like the search index is stale.",technical,medium
+"Notifications are delayed by 2-3 hours. Real-time alerts are not working.",technical,medium
+"The dark mode setting resets to light mode every time I reload the page.",technical,low
+"Is there a keyboard shortcut to quickly navigate between sections?",technical,low
+"The bulk delete feature seems slower than before. Is this a known performance issue?",technical,low
+"I get a warning message saying my browser is unsupported but I am on the latest Chrome.",technical,low
+"The new table view is missing the sort functionality that existed in the old view.",technical,medium
+"After importing data the timestamps all show UTC instead of my local timezone.",technical,medium
+"My account verification email has not arrived after 24 hours. I cannot complete registration.",account,high
+"Someone is posting content from my account that I did not create. Account may be compromised.",account,high
+"I need to delete my account and all associated data permanently per GDPR request.",account,high
+"My account was suspended without explanation. I need this resolved to access my data.",account,high
+"I want to change my username but the field is greyed out in settings.",account,medium
+"How do I update my billing email address? I cannot find the option in my profile.",account,medium
+"I need to add a team member to my account but the invite is not working.",account,medium
+"My profile picture refuses to update. I keep getting a generic file upload error.",account,medium
+"I need to merge two accounts that I accidentally created with different email addresses.",account,medium
+"How do I download all my data before I close my account?",account,low
+"Can I change the language of my account interface to Spanish?",account,low
+"I would like to update my company name on the account. How do I do this?",account,low
+"My email notification preferences keep resetting after I save them.",account,medium
+"How do I transfer account ownership to a colleague who is taking over my role?",account,medium
+"My account shows a different name than what I registered with. How did this happen?",account,medium
+"I need to reactivate my account that was closed 6 months ago. Is this possible?",account,low
+"My ad campaign spent the entire monthly budget in 2 hours without reaching the target audience.",ads,high
+"Impression volume dropped 90% overnight with no changes to targeting or budget on our side.",ads,high
+"Our most important campaign is not serving any ads at all. Launch was scheduled for today.",ads,high
+"The conversion tracking pixel stopped firing yesterday. We cannot measure any campaign results.",ads,high
+"CPC has doubled in the last 48 hours with no changes to bids or targeting.",ads,high
+"My ad was rejected for policy violation but the content clearly follows all guidelines.",ads,medium
+"I cannot figure out why my audience size shows 0 after setting up custom targeting.",ads,medium
+"The campaign performance report shows different numbers than the API response.",ads,medium
+"I want to set a daily spend cap but the option does not appear in my campaign settings.",ads,medium
+"My video ad format is not available in the campaign creation flow. Is it region-restricted?",ads,medium
+"Can you explain the difference between CPM and CPC billing for display campaigns?",ads,low
+"How do I set up remarketing audiences for users who visited specific pages?",ads,low
+"Where can I find the historical performance data for campaigns I ran last year?",ads,low
+"What image dimensions are recommended for banner ads in the sidebar placement?",ads,low
+"I want to understand how the auction algorithm determines which ads win impressions.",ads,low
+"Are there any restrictions on using competitor brand names in ad copy?",ads,low
+"I would like to learn about A/B testing different ad creatives. Is that supported?",ads,low
+"I am interested in your enterprise pricing. Can someone contact me to discuss options?",other,low
+"Do you offer a student or nonprofit discount for your service?",other,low
+"Can I try the premium features before committing to a paid plan?",other,low
+"I would love to see a dark mode for the web application. Any plans for this?",other,low
+"Is there a public API documentation page? I want to integrate your service.",other,low
+"How do I export my data to use it in another application?",other,low
+"Do you have a mobile app for Android? I only see the iOS version listed.",other,low
+"I would like to give feedback about the recent UI redesign. Overall it feels harder to use.",other,low
+"Is your service available in Japanese? I could not find a language setting.",other,low
+"What is your data retention policy for free accounts?",other,low
+"I read about a new feature in your blog post but cannot find it in my account.",other,low
+"How do I refer a colleague and get the referral reward you advertised?",other,low
+"Are there any webinars or tutorials available for new users?",other,low
+"I am migrating from a competitor product. Do you offer a migration service?",other,low
+"What is the uptime SLA for paid plans? I need this for a vendor assessment.",other,low
+"Can I use your service for commercial projects under the free tier?",other,low

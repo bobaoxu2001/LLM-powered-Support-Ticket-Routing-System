@@ -15,13 +15,15 @@ sys.path.append(str(PROJECT_ROOT / "src"))
 
 from llm_support_routing.config import DATA_PROCESSED, DATA_RAW, MODELS_DIR, OUTPUTS_DIR
 from llm_support_routing.data import build_unified_ticket_table, download_kaggle_dataset, ensure_dirs, load_csvs
-from llm_support_routing.evaluation import routing_metrics, threshold_sweep
+from llm_support_routing.evaluation import evaluate_on_labeled_set, routing_metrics, threshold_sweep
 from llm_support_routing.features import add_weak_labels
 from llm_support_routing.models import load_model, save_model, train_tfidf_logreg
 from llm_support_routing.routing import route_dataframe
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
+EVAL_SET_PATH = PROJECT_ROOT / "data" / "eval" / "eval_tickets.csv"
 
 
 def _first_frame(frames: dict[str, pd.DataFrame]) -> pd.DataFrame:
@@ -60,8 +62,17 @@ def main(download: bool) -> None:
     unified = build_unified_ticket_table(twitter_df, tickets_df)
     logger.info("Unified table: %d rows (after inbound filter + dedup)", len(unified))
 
-    logger.info("Generating weak labels...")
+    logger.info("Applying labels (real where available, keyword fallback elsewhere)...")
     labeled = add_weak_labels(unified)
+
+    real_count = int((labeled.get("label_quality", pd.Series()) == "real").sum())
+    weak_count = int((labeled.get("label_quality", pd.Series()) == "weak").sum())
+    logger.info(
+        "Label composition: %d real labels (%.1f%%) | %d keyword labels (%.1f%%)",
+        real_count, 100 * real_count / max(len(labeled), 1),
+        weak_count, 100 * weak_count / max(len(labeled), 1),
+    )
+
     labeled.to_csv(DATA_PROCESSED / "unified_labeled_tickets.csv", index=False)
 
     # ── Train one classifier per label dimension ──────────────────────────────
@@ -80,12 +91,47 @@ def main(download: bool) -> None:
             label_col, result.accuracy, result.cv_mean, result.cv_std,
         )
         report_lines.append(f"=== {label_col} ===")
-        report_lines.append(f"Held-out accuracy : {result.accuracy:.4f}")
-        report_lines.append(f"5-fold CV         : {result.cv_mean:.4f} ± {result.cv_std:.4f}")
+        report_lines.append(
+            f"Held-out accuracy : {result.accuracy:.4f}\n"
+            f"5-fold CV         : {result.cv_mean:.4f} ± {result.cv_std:.4f}\n"
+            f"Label composition : {real_count} real / {weak_count} keyword"
+        )
         report_lines.append(result.report)
 
     issue_model = load_model(str(MODELS_DIR / "issue_type_tfidf_lr.joblib"))
     urgency_model = load_model(str(MODELS_DIR / "urgency_tfidf_lr.joblib"))
+
+    # ── Eval set: ML vs keyword baseline comparison ───────────────────────────
+    if EVAL_SET_PATH.exists():
+        logger.info("Evaluating ML model vs keyword baseline on labeled eval set...")
+        eval_result = evaluate_on_labeled_set(issue_model, EVAL_SET_PATH)
+        logger.info(
+            "Eval set (%d samples) — ML: %.4f | Keyword baseline: %.4f | Lift: %+.4f",
+            eval_result["n_eval_samples"],
+            eval_result["ml_accuracy"],
+            eval_result["keyword_baseline_accuracy"],
+            eval_result["ml_lift_over_baseline"],
+        )
+        report_lines.append("=== Eval Set: ML vs Keyword Baseline ===")
+        report_lines.append(
+            f"Samples              : {eval_result['n_eval_samples']}\n"
+            f"ML accuracy          : {eval_result['ml_accuracy']:.4f}\n"
+            f"Keyword baseline acc : {eval_result['keyword_baseline_accuracy']:.4f}\n"
+            f"ML lift              : {eval_result['ml_lift_over_baseline']:+.4f}\n"
+        )
+        report_lines.append("--- ML Model Report ---")
+        report_lines.append(eval_result["ml_report"])
+        report_lines.append("--- Keyword Baseline Report ---")
+        report_lines.append(eval_result["keyword_report"])
+
+        pd.DataFrame([{
+            "ml_accuracy": eval_result["ml_accuracy"],
+            "keyword_baseline_accuracy": eval_result["keyword_baseline_accuracy"],
+            "ml_lift": eval_result["ml_lift_over_baseline"],
+            "n_eval_samples": eval_result["n_eval_samples"],
+        }]).to_csv(OUTPUTS_DIR / "eval_comparison.csv", index=False)
+    else:
+        logger.info("No eval set found at %s — skipping baseline comparison.", EVAL_SET_PATH)
 
     # ── Route a sample using issue + urgency models ───────────────────────────
     logger.info("Routing sample of 5000 tickets...")
@@ -97,7 +143,6 @@ def main(download: bool) -> None:
     logger.info("Running confidence threshold sweep...")
     sweep_df = threshold_sweep(sample["text"].tolist(), issue_model)
     sweep_df.to_csv(OUTPUTS_DIR / "threshold_sweep.csv", index=False)
-    logger.info("Threshold sweep:\n%s", sweep_df.to_string(index=False))
 
     # ── Persist outputs ───────────────────────────────────────────────────────
     routed.to_csv(OUTPUTS_DIR / "routed_tickets.csv", index=False)
