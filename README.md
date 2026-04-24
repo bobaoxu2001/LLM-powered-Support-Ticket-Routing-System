@@ -6,11 +6,17 @@ An end-to-end **support operations routing system** that combines deterministic 
 
 Built as a portfolio-grade project for **Business Data Scientist / gDATA-style** roles, emphasizing measurable lift over baselines, operating-threshold tradeoffs, and cost-aware decisioning.
 
+**This is a support operations routing system, not a conversational chatbot.** It simulates a gTech / Google Ads-style support workflow using public datasets: incoming tickets are classified and routed to the correct queue through a four-stage cascade — deterministic rules, calibrated ML, LLM issue-type classification for ambiguous cases, and human triage as a safety net.
+
+**Problem it solves:** Support teams need to route cases quickly and safely. Fully manual triage is costly; LLM-only routing is expensive and hard to control. This project makes the tradeoffs between automation coverage, human review load, LLM invocation cost, and routing accuracy explicit and measurable.
+
+For a deeper explanation of design choices, evaluation strategy, operational tradeoffs, and limitations, see [docs/case_study.md](docs/case_study.md).
+
 ## Dashboard Preview
 
 ![Dashboard Preview](assets/dashboard_preview.png)
 
-> **Note:** The dashboard preview is for demonstration. Run `streamlit run app.py` after the pipeline to view outputs from your local run. To update this image, save a screenshot to `assets/dashboard_preview.png`.
+> This screenshot is committed as a preview from a local run of the Streamlit dashboard using project-generated outputs. To refresh it, run `python scripts/run_pipeline.py`, relaunch `streamlit run app.py`, and save a new screenshot to `assets/dashboard_preview.png`.
 
 The dashboard shows:
 
@@ -146,11 +152,11 @@ Urgency appends `_priority` to queues (e.g., `billing_queue_priority`) for `high
 | `src/llm_support_routing/llm.py` | LLM classify/summarize/enrich with resilient JSON parsing and error sentinel |
 | `src/llm_support_routing/evaluation.py` | Routing KPIs, labeled-set eval vs keyword baseline, threshold sweep |
 | `scripts/run_pipeline.py` | End-to-end: load → unify → label → train → evaluate → route → export |
-| `scripts/train_distilbert.py` | Optional DistilBERT fine-tuning path |
+| `scripts/train_distilbert.py` | Experimental DistilBERT fine-tuning path (requires `transformers` and `datasets`; not part of the default pipeline) |
 | `app.py` | Streamlit dashboard |
-| `data/eval/eval_tickets.csv` | Committed labeled eval set (100 rows, 6 issue types) |
+| `data/eval/eval_tickets.csv` | Committed labeled eval set (99 tickets, 6 issue types) |
 
-> You can add `assets/dashboard_preview.png` after running the pipeline locally and relaunching Streamlit.
+> `assets/dashboard_preview.png` is committed as a preview screenshot. Run the pipeline locally and relaunch Streamlit to generate a fresh version.
 
 ## Artifacts generated
 
@@ -197,6 +203,25 @@ Generates a cost–coverage operating curve over thresholds 0.50–0.95 using ML
 Outputs: auto-route rate, LLM fallback rate, human fallback rate, cost/ticket estimate, and a weighted recommendation score.
 
 The recommended threshold is a **cost–coverage policy guide**, not an automatically applied value. Apply via `--high-threshold` and `--low-threshold`.
+
+---
+
+## What the results show
+
+- **ML vs keyword baseline**: the eval set (99 labeled tickets) measures whether TF-IDF + Logistic Regression adds signal over hand-written keyword heuristics. Accuracy lift and macro-F1 lift are the primary signals.
+- **Threshold sweep**: changing `high_threshold` and `low_threshold` shifts tickets between auto-route, LLM-classification, and human-triage buckets, making cost–coverage tradeoffs explicit across an operating curve.
+- **`human_triage_rate`** is a routing-system metric — the fraction of tickets routed to `human_triage_queue`. It is a manual-review proxy, not a downstream escalation rate. True escalation would require tracking outcomes after human review.
+- **`complexity`** is a word-count heuristic proxy (`low` / `medium` / `high`), not independently annotated semantic complexity.
+- **Threshold recommendation** is an analytic cost–coverage policy guide based on ML confidence scores. It is not automatically applied and is not the "optimal" threshold in an accuracy sense.
+- **Measured metrics** (accuracy, F1, per-class) require `data/eval/eval_tickets.csv`. **Estimated metrics** (cost, sweep rates) are computed analytically from ML scores only, with no LLM calls required.
+
+## Key takeaways
+
+- ML routing improves over keyword-only routing on the labeled eval set.
+- Threshold tuning meaningfully shifts the auto-route / LLM-call / human-review split — making that tradeoff explicit is the point.
+- LLM usage is deliberately limited to low-confidence cases to control API cost and reduce unnecessary calls.
+- Human fallback is the safety layer: ambiguous cases and LLM failures route to `human_triage_queue` rather than silently misfiring.
+- This is a portfolio prototype using public support data, not a production deployment.
 
 ---
 
