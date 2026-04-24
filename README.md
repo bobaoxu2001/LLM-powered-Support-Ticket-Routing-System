@@ -47,7 +47,7 @@ LLM reasoning (low-confidence cases)
 Human triage (uncertain or LLM-unavailable)
 ```
 
-### Routing stages
+Routing stages:
 
 1. **Rule-based**: deterministic patterns in `RULE_PATTERNS`.
 2. **ML high-confidence**: TF-IDF + Logistic Regression (calibrated) routes automatically when confidence ≥ high threshold.
@@ -199,9 +199,7 @@ This supports business decisions around cost vs automation coverage vs risk whil
 
 ## Dashboard Preview
 
-No static screenshot is committed in this repo by default.
-
-> You can add `assets/dashboard_preview.png` after running the pipeline locally and relaunching Streamlit.
+No static dashboard screenshot is committed yet. After running the pipeline locally, launch `streamlit run app.py` and save a screenshot to `assets/dashboard_preview.png` if you want a preview image here.
 
 ## Dashboard
 
