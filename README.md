@@ -199,9 +199,9 @@ This supports business decisions around cost vs automation coverage vs risk whil
 
 ## Dashboard Preview
 
-A static preview image can be stored at `assets/dashboard_preview.png` if you generate one locally.
+No static screenshot is committed in this repo by default.
 
-> The screenshot is a demo preview. For fresh outputs, run the pipeline locally and relaunch Streamlit.
+> You can add `assets/dashboard_preview.png` after running the pipeline locally and relaunching Streamlit.
 
 ## Dashboard
 
@@ -227,10 +227,10 @@ Dashboard includes:
 
 ## Visual assets
 
-- If `assets/dashboard_preview.png` exists in your local repo, keep it as the static dashboard preview.
-- Optional local demo asset: `assets/live_routing_demo.png` (generate locally if desired).
+- Optional local preview asset: `assets/dashboard_preview.png`.
+- Optional local demo asset: `assets/live_routing_demo.png`.
 
-To generate `assets/live_routing_demo.png` locally, run the dashboard (`streamlit run app.py`) and capture the live routing section after entering a sample ticket.
+To generate either asset locally, run the dashboard (`streamlit run app.py`) after producing fresh pipeline outputs.
 
 ---
 
