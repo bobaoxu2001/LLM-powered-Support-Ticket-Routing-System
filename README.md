@@ -32,7 +32,7 @@ Shows how confidence thresholds shift tickets between auto-routing, LLM fallback
 
 ![Model Evaluation](assets/model_evaluation.png)
 
-Shows measured ML-vs-keyword baseline performance on the labeled eval set, including accuracy, macro-F1, weighted-F1, and per-class F1 where available.
+Shows measured ML-vs-keyword baseline performance on the metadata-derived labeled eval set (399 tickets, 6 issue types), including accuracy, macro-F1, weighted-F1, and per-class F1 where available.
 
 The Streamlit dashboard (`streamlit run app.py`) provides interactive versions of all panels, plus a live routing demo for pasting ticket text directly.
 
@@ -171,7 +171,9 @@ These are public support datasets used to simulate a gTech-style support routing
 | `scripts/generate_preview_assets.py` | Generate focused preview images (`assets/*.png`) from pipeline output CSVs |
 | `scripts/train_distilbert.py` | Experimental DistilBERT fine-tuning path (requires `transformers` and `datasets`; not part of the default pipeline) |
 | `app.py` | Streamlit dashboard |
-| `data/eval/eval_tickets.csv` | Committed labeled eval set (99 tickets, 6 issue types) |
+| `data/eval/eval_tickets.csv` | Metadata-derived labeled eval set (399 tickets, 6 issue types): 99 manually-written rows + 300 rows from structured Ticket Type metadata |
+| `data/eval/eval_set_summary.csv` | Per-class, per-source breakdown of the eval set |
+| `scripts/build_eval_set.py` | Script that builds the expanded eval set from Kaggle metadata |
 
 > Run `python scripts/generate_preview_assets.py` after `python scripts/run_pipeline.py --download` to regenerate `assets/dashboard_overview.png`, `assets/policy_tradeoff.png`, and `assets/model_evaluation.png`.
 
@@ -225,7 +227,7 @@ The recommended threshold is a **cost–coverage policy guide**, not an automati
 
 ## What the results show
 
-- **ML vs keyword baseline**: the eval set (99 labeled tickets) measures whether TF-IDF + Logistic Regression adds signal over hand-written keyword heuristics. Accuracy lift and macro-F1 lift are the primary signals.
+- **ML vs keyword baseline**: evaluated on a metadata-derived labeled eval set (399 tickets, 6 issue types). Labels come from structured Ticket Type metadata, not model predictions or keyword heuristics. 99 rows are manually written; 300 rows use Ticket Type from the suraj520 Kaggle dataset (a synthetic dataset with template-generated descriptions and random label assignments). The keyword baseline currently matches or slightly outperforms ML on this set — results should be interpreted as metadata-derived evaluation, not manually adjudicated gold labels. Accuracy lift and macro-F1 lift are the primary signals when comparing the two approaches.
 - **Threshold sweep**: changing `high_threshold` and `low_threshold` shifts tickets between auto-route, LLM-classification, and human-triage buckets, making cost–coverage tradeoffs explicit across an operating curve.
 - **`human_triage_rate`** is a routing-system metric — the fraction of tickets routed to `human_triage_queue`. It is a manual-review proxy, not a downstream escalation rate. True escalation would require tracking outcomes after human review.
 - **`complexity`** is a word-count heuristic proxy (`low` / `medium` / `high`), not independently annotated semantic complexity.
@@ -234,7 +236,7 @@ The recommended threshold is a **cost–coverage policy guide**, not an automati
 
 ## Key takeaways
 
-- ML routing is evaluated against keyword-only routing on the labeled eval set, with accuracy and macro-F1 lift reported in the eval artifacts.
+- ML routing is evaluated against keyword-only routing on the metadata-derived eval set (399 tickets). Labels are from structured Ticket Type metadata — not manually adjudicated gold labels. Future work should include human-reviewed adjudication for more reliable per-class signal.
 - Threshold tuning meaningfully shifts the auto-route / LLM-call / human-review split — making that tradeoff explicit is the point.
 - LLM usage is deliberately limited to low-confidence cases to control API cost and reduce unnecessary calls.
 - Human fallback is the safety layer: ambiguous cases and LLM failures route to `human_triage_queue` rather than silently misfiring.

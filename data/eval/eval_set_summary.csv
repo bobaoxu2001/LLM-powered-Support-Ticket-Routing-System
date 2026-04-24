@@ -1,0 +1,13 @@
+eval_label_source,issue_type,count
+manually_written,account,16
+manually_written,ads,17
+manually_written,billing,17
+manually_written,login,17
+manually_written,other,16
+manually_written,technical,16
+metadata_ticket_type,account,0
+metadata_ticket_type,ads,0
+metadata_ticket_type,billing,100
+metadata_ticket_type,login,0
+metadata_ticket_type,other,100
+metadata_ticket_type,technical,100

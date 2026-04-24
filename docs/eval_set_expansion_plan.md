@@ -1,10 +1,22 @@
-# Eval Set Expansion Plan (toward 500 rows)
+# Eval Set Expansion — Status and Plan
 
-Current `data/eval/eval_tickets.csv` has balanced classes but limited size. In this environment, expanding safely to 300–500 rows is not feasible without ingesting additional structured-ticket rows and reviewing label quality.
+## Current status (2026-04-24)
+
+`data/eval/eval_tickets.csv` has been expanded to **399 rows** (6 issue types) using `scripts/build_eval_set.py`:
+
+| Source | Rows | Label origin |
+|---|---|---|
+| Manually written | 99 | Hand-authored representative examples |
+| Kaggle metadata (suraj520) | 300 | `Ticket Type` structured field → issue_type mapping |
+
+**Important caveat — Kaggle dataset quality**: the `suraj520/customer-support-ticket-dataset` is a synthetic dataset. All 8,469 Ticket Descriptions contain a `{product_purchased}` placeholder that was never substituted. Ticket Subject and Ticket Type are randomly assigned and do not reflect actual description content. The 300 metadata-derived rows therefore have **limited text-label alignment**. Treat results on these rows as metadata-labeled evaluation, not a manually adjudicated gold standard.
+
+Classes `ads` and `login` have only 17 rows each (manually written) because the Kaggle dataset contains no tickets mapping to those types.
+
+## Original expansion plan (toward 500 rows)
 
 This plan describes how to expand responsibly without fabricating labels.
 
-Current snapshot (2026-04-24): `data/eval/eval_tickets.csv` has 99 rows with near-balanced classes (16–17 each), which is useful but still small for robust policy tuning.
 
 ## 1) Sampling strategy
 1. Load structured ticket dataset rows with `Ticket Subject`, `Ticket Description`, `Ticket Type`, and `Ticket Priority`.

@@ -54,14 +54,14 @@ This system is intended for policy discussion, not one-click automation claims:
 
 ## 7) Limitations
 - Data is public support data, not Google Ads proprietary data.
-- Eval reliability is bounded by eval-set size unless expanded.
+- The eval set (399 tickets) uses metadata-derived labels: 99 manually-written rows and 300 rows labeled via Ticket Type metadata from the suraj520 Kaggle dataset (a synthetic dataset with template descriptions and random label assignments). Labels are **not** manually adjudicated gold labels. The keyword baseline currently matches or slightly outperforms ML on this set, which is expected given the limited text-label alignment in the Kaggle-derived rows.
 - No true production AHT or downstream escalation outcome tracking in this repo.
 - Complexity is heuristic, not annotated semantic truth.
 - Threshold recommendation currently is not accuracy-aware by queue.
 - LLM outputs still require monitoring and human review.
 
 ## 8) Next Steps
-1. Expand manually reviewed eval coverage with a larger labeled set.
+1. Human adjudication of the metadata-derived eval labels — the current 300 Kaggle-sourced rows use Ticket Type as the label, which has poor text-label alignment in this synthetic dataset. A manually reviewed gold set (500–2,000 rows) would yield more reliable per-class F1 estimates.
 2. Add queue-specific SLA-aware threshold policies.
 3. Add reliability/calibration plots.
 4. Benchmark latency across routing stages.
