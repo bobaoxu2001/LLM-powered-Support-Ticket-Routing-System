@@ -6,8 +6,6 @@ An end-to-end **support operations routing system** that combines deterministic 
 
 Built as a portfolio-grade project for **Business Data Scientist / gDATA-style** roles, emphasizing measurable lift over baselines, operating-threshold tradeoffs, and cost-aware decisioning.
 
-### Routing stages
-
 ## Dashboard Preview
 
 ![Dashboard Preview](assets/dashboard_preview.png)
