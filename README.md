@@ -139,6 +139,8 @@ Urgency appends `_priority` to queues (e.g., `billing_queue_priority`) for `high
 - Provides large-scale ticket text + structured metadata.
 - `Ticket Type` → issue-type labels; `Ticket Priority` → urgency labels.
 
+These are public support datasets used to simulate a gTech-style support routing workflow; no proprietary Google Ads or internal Google support data was used.
+
 ---
 
 ## Project structure
@@ -217,7 +219,7 @@ The recommended threshold is a **cost–coverage policy guide**, not an automati
 
 ## Key takeaways
 
-- ML routing improves over keyword-only routing on the labeled eval set.
+- ML routing is evaluated against keyword-only routing on the labeled eval set, with accuracy and macro-F1 lift reported in the eval artifacts.
 - Threshold tuning meaningfully shifts the auto-route / LLM-call / human-review split — making that tradeoff explicit is the point.
 - LLM usage is deliberately limited to low-confidence cases to control API cost and reduce unnecessary calls.
 - Human fallback is the safety layer: ambiguous cases and LLM failures route to `human_triage_queue` rather than silently misfiring.
