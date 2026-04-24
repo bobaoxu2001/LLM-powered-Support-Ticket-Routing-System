@@ -7,3 +7,8 @@ data/processed/
 models/
 outputs/
 .venv/
+
+# Next.js portfolio site
+portfolio-site/.next/
+portfolio-site/node_modules/
+portfolio-site/.env*.local
