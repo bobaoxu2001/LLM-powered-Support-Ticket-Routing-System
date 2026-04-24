@@ -94,7 +94,7 @@ python scripts/run_pipeline.py --high-threshold 0.80 --low-threshold 0.50 --enri
 
 - **Inbound-only training data**: Twitter agent messages are filtered out; only real customer-authored messages are retained.
 - **Real label extraction**: structured ticket fields (`Ticket Type`, `Ticket Priority`) are mapped into issue/urgency labels — not synthetic keyword heuristics.
-- **Baseline comparison**: ML vs keyword heuristic on a committed labeled eval set, with accuracy, macro/weighted F1, per-class tables, and confusion matrices.
+- **Baseline comparison**: ML vs keyword heuristic evaluated on both a committed metadata-derived eval set and a clean supervised held-out benchmark; reports accuracy, macro/weighted F1, per-class tables, and confusion matrices. Labels are metadata-derived, not human-reviewed production labels.
 - **Honest metric semantics**: measured, estimated, and proxy metrics are clearly separated (see below).
 - **Calibrated confidence scores**: isotonic calibration on logistic regression for reliable threshold gating.
 - **Batched ML inference** for routing throughput.
@@ -107,7 +107,7 @@ python scripts/run_pipeline.py --high-threshold 0.80 --low-threshold 0.50 --enri
 This project uses three clearly distinct metric types:
 
 ### Measured metrics
-Computed against a ground-truth labeled set (`data/eval/eval_tickets.csv`). Only available when that file exists.
+Computed against a labeled evaluation set or metadata-derived held-out benchmark labels (`data/eval/eval_tickets.csv` / supervised benchmark). These labels are metadata-derived unless explicitly human-reviewed. Only available when the eval file exists.
 
 - `ml_accuracy`, `keyword_baseline_accuracy`
 - `ml_macro_f1`, `ml_weighted_f1` and their lifts over the keyword baseline
