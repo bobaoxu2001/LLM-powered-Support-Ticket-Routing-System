@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useCallback } from "react";
 import Image from "next/image";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -22,6 +25,8 @@ import {
   Cpu,
   Scale,
   FlaskConical,
+  X,
+  ZoomIn,
 } from "lucide-react";
 
 // ─────────────────────────────────────────────
@@ -57,10 +62,76 @@ function SectionHeader({
 }
 
 // ─────────────────────────────────────────────
+// Image Modal
+// ─────────────────────────────────────────────
+
+interface ModalImage {
+  file: string;
+  title: string;
+  caption: string;
+}
+
+function ImageModal({
+  image,
+  onClose,
+}: {
+  image: ModalImage;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8"
+      onClick={onClose}
+    >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
+
+      {/* Panel */}
+      <div
+        className="relative z-10 max-w-5xl w-full bg-[#0d1120] border border-white/[0.10] rounded-2xl overflow-hidden shadow-2xl shadow-black/60"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-20 p-2 rounded-xl bg-white/[0.08] border border-white/[0.10] text-slate-300 hover:bg-white/[0.14] hover:text-white transition-all"
+          aria-label="Close preview"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        {/* Image */}
+        <div className="bg-slate-900/60">
+          <Image
+            src={image.file}
+            alt={image.title}
+            width={1200}
+            height={750}
+            className="w-full h-auto"
+          />
+        </div>
+
+        {/* Caption */}
+        <div className="p-6 md:p-8">
+          <h3 className="text-xl font-bold text-white mb-2">{image.title}</h3>
+          <p className="text-sm text-slate-400 leading-relaxed">{image.caption}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
 // 1. Hero
 // ─────────────────────────────────────────────
 
-const HERO_KPIS: { value: string; label: string; sub: string; icon: LucideIcon }[] = [
+const HERO_KPIS: {
+  value: string;
+  label: string;
+  sub: string;
+  subDetail?: string;
+  icon: LucideIcon;
+}[] = [
   {
     value: "8,325",
     label: "Structured Ticket Rows",
@@ -77,6 +148,7 @@ const HERO_KPIS: { value: string; label: string; sub: string; icon: LucideIcon }
     value: "+21.1 pts",
     label: "Macro-F1 Lift",
     sub: "Improved ML vs keyword baseline",
+    subDetail: "12.1% → 33.2% vs keyword baseline",
     icon: TrendingUp,
   },
   {
@@ -123,10 +195,11 @@ function Hero() {
 
         {/* Subtitle */}
         <p className="text-lg md:text-xl text-slate-400 max-w-3xl mx-auto mb-10 leading-relaxed">
-          A gDATA-style case routing system that combines rules, calibrated ML,
-          LLM fallback, and human triage to make support ticket routing{" "}
+          A gDATA-style support operations case study that uses public support
+          data, ML/NLP, selective LLM fallback, and human-safe routing policies
+          to automate case routing and turn model confidence into{" "}
           <span className="text-slate-200 font-medium">
-            measurable, cost-aware, and controllable.
+            actionable operating recommendations.
           </span>
         </p>
 
@@ -139,7 +212,7 @@ function Hero() {
             className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-semibold hover:from-blue-500 hover:to-violet-500 transition-all duration-200 shadow-xl shadow-blue-600/20"
           >
             <ExternalLink className="w-4 h-4" />
-            View GitHub
+            View GitHub Implementation
           </a>
           <a
             href="https://github.com/bobaoxu2001/LLM-powered-Support-Ticket-Routing-System/blob/main/README.md"
@@ -148,7 +221,7 @@ function Hero() {
             className="inline-flex items-center gap-2 px-7 py-3.5 rounded-xl bg-white/5 border border-white/10 text-white font-semibold hover:bg-white/10 hover:border-white/20 transition-all duration-200"
           >
             <BookOpen className="w-4 h-4" />
-            Read Case Study
+            Read Technical Case Study
           </a>
         </div>
 
@@ -169,6 +242,11 @@ function Hero() {
                   {k.label}
                 </div>
                 <div className="text-xs text-slate-500">{k.sub}</div>
+                {k.subDetail && (
+                  <div className="text-[11px] text-blue-400/70 mt-1 font-mono">
+                    {k.subDetail}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -341,6 +419,84 @@ function WorkflowSection() {
 }
 
 // ─────────────────────────────────────────────
+// 3b. Why This Maps to Business Data Science
+// ─────────────────────────────────────────────
+
+function BizDataScienceMapping() {
+  const cards: {
+    icon: LucideIcon;
+    title: string;
+    desc: string;
+    accent: string;
+    iconBg: string;
+  }[] = [
+    {
+      icon: Target,
+      title: "Business Problem Framing",
+      desc: "Balances manual triage cost, automation coverage, LLM invocation cost, and routing quality.",
+      accent: "border-blue-500/20",
+      iconBg: "bg-blue-500/10 border-blue-500/20 text-blue-400",
+    },
+    {
+      icon: FlaskConical,
+      title: "Data Science Implementation",
+      desc: "Uses public support data, metadata-derived labels, supervised benchmark, and threshold-sweep analysis.",
+      accent: "border-violet-500/20",
+      iconBg: "bg-violet-500/10 border-violet-500/20 text-violet-400",
+    },
+    {
+      icon: Brain,
+      title: "ML/NLP + LLM Solutioning",
+      desc: "Combines keyword rules, TF-IDF/Logistic Regression, selective LLM classification, and human fallback.",
+      accent: "border-indigo-500/20",
+      iconBg: "bg-indigo-500/10 border-indigo-500/20 text-indigo-400",
+    },
+    {
+      icon: TrendingUp,
+      title: "Actionable Recommendation",
+      desc: "Recommends a hybrid routing policy and confidence-threshold selection based on risk, review capacity, and LLM budget.",
+      accent: "border-emerald-500/20",
+      iconBg: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
+    },
+  ];
+
+  return (
+    <section id="biz-ds-mapping" className="py-24 px-6 bg-[#0a0e1c]">
+      <div className="max-w-6xl mx-auto">
+        <SectionHeader
+          badge="gDATA Alignment"
+          title="Why this maps to Business Data Science"
+          subtitle="Designed to show the full loop from ambiguous support-ops problem to data-driven recommendation."
+        />
+        <div className="mt-16 grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {cards.map((c) => {
+            const Icon = c.icon;
+            return (
+              <div
+                key={c.title}
+                className={`bg-white/[0.04] border ${c.accent} rounded-2xl p-8 hover:bg-white/[0.06] transition-all duration-200`}
+              >
+                <div
+                  className={`inline-flex p-3 rounded-xl border ${c.iconBg} mb-6`}
+                >
+                  <Icon className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-semibold text-white mb-3">
+                  {c.title}
+                </h3>
+                <p className="text-slate-400 leading-relaxed text-sm">
+                  {c.desc}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────
 // 4. Solution Architecture
 // ─────────────────────────────────────────────
 
@@ -398,7 +554,7 @@ function SolutionArchitecture() {
   ];
 
   return (
-    <section id="architecture" className="py-24 px-6 bg-[#0a0e1c]">
+    <section id="architecture" className="py-24 px-6 bg-[#080c1a]">
       <div className="max-w-6xl mx-auto">
         <SectionHeader
           badge="System Design"
@@ -471,49 +627,291 @@ function SolutionArchitecture() {
 }
 
 // ─────────────────────────────────────────────
+// 4b. Routing Simulator
+// ─────────────────────────────────────────────
+
+interface RouteResult {
+  queue: string;
+  stage: string;
+  confidence: number;
+  reason: string;
+  nextAction: string;
+}
+
+const SAMPLE_TICKETS = [
+  {
+    label: "Billing refund issue",
+    text: "I was charged twice this month and need a refund for the duplicate payment.",
+  },
+  {
+    label: "Login access issue",
+    text: "I cannot log into my account after resetting my password. It keeps saying invalid credentials.",
+  },
+  {
+    label: "Technical bug issue",
+    text: "The dashboard crashes every time I upload a CSV file and I cannot complete my workflow.",
+  },
+];
+
+function classifyTicket(text: string): RouteResult {
+  const t = text.toLowerCase();
+  if (/charge|refund|payment|billing/.test(t)) {
+    return {
+      queue: "billing_queue_priority",
+      stage: "Rule-based Routing",
+      confidence: 0.91,
+      reason: "High-signal billing keyword matched a deterministic rule pattern.",
+      nextAction: "Auto-route to Billing queue. No agent review needed at this confidence.",
+    };
+  }
+  if (/login|password|account|credentials/.test(t)) {
+    return {
+      queue: "account_support_queue",
+      stage: "Calibrated ML",
+      confidence: 0.74,
+      reason: "ML classifier matched account-access pattern with moderate confidence.",
+      nextAction: "Auto-route to Account Support. Monitor queue for threshold review.",
+    };
+  }
+  if (/crash|error|upload|bug|dashboard/.test(t)) {
+    return {
+      queue: "technical_support_queue",
+      stage: "Calibrated ML",
+      confidence: 0.82,
+      reason: "ML classifier matched technical issue pattern with high confidence.",
+      nextAction: "Auto-route to Technical Support. Confidence exceeds high-routing threshold.",
+    };
+  }
+  return {
+    queue: "human_triage_queue",
+    stage: "Human Triage",
+    confidence: 0.52,
+    reason: "No high-confidence rule or ML match. Ambiguous ticket requires human review.",
+    nextAction: "Route to Human Triage. Agent should classify before forwarding.",
+  };
+}
+
+function RoutingSimulator() {
+  const [text, setText] = useState("");
+  const [result, setResult] = useState<RouteResult | null>(null);
+
+  const handleRoute = useCallback(() => {
+    if (text.trim()) setResult(classifyTicket(text));
+  }, [text]);
+
+  const handleSample = useCallback((sample: string) => {
+    setText(sample);
+    setResult(classifyTicket(sample));
+  }, []);
+
+  const confidenceColor = !result
+    ? ""
+    : result.confidence >= 0.85
+    ? "text-emerald-400"
+    : result.confidence >= 0.70
+    ? "text-blue-400"
+    : "text-amber-400";
+
+  const stageChip = !result
+    ? ""
+    : result.stage === "Rule-based Routing"
+    ? "text-yellow-300 bg-yellow-500/10 border-yellow-500/20"
+    : result.stage === "Calibrated ML"
+    ? "text-blue-300 bg-blue-500/10 border-blue-500/20"
+    : result.stage === "LLM Fallback"
+    ? "text-violet-300 bg-violet-500/10 border-violet-500/20"
+    : "text-emerald-300 bg-emerald-500/10 border-emerald-500/20";
+
+  return (
+    <section id="simulator" className="py-24 px-6 bg-[#0a0e1c]">
+      <div className="max-w-6xl mx-auto">
+        <SectionHeader
+          badge="Interactive Demo"
+          title="Try the routing logic"
+          subtitle="Paste or select a sample support ticket to see how the hybrid routing policy would classify and route it."
+        />
+
+        <div className="mt-14 grid lg:grid-cols-2 gap-6">
+          {/* Left: input */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-7 flex flex-col gap-5">
+            <div>
+              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">
+                Ticket text
+              </label>
+              <textarea
+                className="w-full h-32 bg-[#080c1a] border border-white/[0.10] rounded-xl p-4 text-sm text-slate-200 placeholder-slate-600 resize-none focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/20 transition-all"
+                placeholder="Example: I was charged twice and need a refund."
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  setResult(null);
+                }}
+              />
+            </div>
+
+            <div>
+              <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                Sample tickets
+              </div>
+              <div className="flex flex-col gap-2">
+                {SAMPLE_TICKETS.map((s) => (
+                  <button
+                    key={s.label}
+                    onClick={() => handleSample(s.text)}
+                    className="text-left px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] text-sm text-slate-300 hover:bg-white/[0.08] hover:border-white/[0.15] hover:text-white transition-all"
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleRoute}
+              disabled={!text.trim()}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white font-semibold text-sm hover:from-blue-500 hover:to-violet-500 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              <ArrowRight className="w-4 h-4" />
+              Route ticket
+            </button>
+          </div>
+
+          {/* Right: output */}
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-2xl p-7">
+            {result ? (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle className="w-5 h-5 text-blue-400 flex-shrink-0" />
+                  <span className="text-sm font-semibold text-blue-300">
+                    Routing result
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[#080c1a] border border-white/[0.06]">
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Predicted Queue
+                  </div>
+                  <div className="text-sm font-mono text-white">{result.queue}</div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[#080c1a] border border-white/[0.06]">
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Routing Stage
+                  </div>
+                  <span
+                    className={`inline-flex px-2.5 py-1 rounded-lg border text-xs font-semibold ${stageChip}`}
+                  >
+                    {result.stage}
+                  </span>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[#080c1a] border border-white/[0.06]">
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Confidence
+                  </div>
+                  <div className={`text-2xl font-bold font-mono ${confidenceColor}`}>
+                    {(result.confidence * 100).toFixed(0)}%
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[#080c1a] border border-white/[0.06]">
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Reason
+                  </div>
+                  <div className="text-sm text-slate-300 leading-relaxed">
+                    {result.reason}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[#080c1a] border border-white/[0.06]">
+                  <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
+                    Suggested Next Action
+                  </div>
+                  <div className="text-sm text-slate-300 leading-relaxed">
+                    {result.nextAction}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="h-full flex flex-col items-center justify-center text-center py-16">
+                <div className="w-12 h-12 rounded-2xl bg-white/[0.05] border border-white/[0.08] flex items-center justify-center mb-4">
+                  <ArrowRight className="w-5 h-5 text-slate-500" />
+                </div>
+                <p className="text-slate-500 text-sm leading-relaxed max-w-xs">
+                  Select a sample or type a ticket, then click{" "}
+                  <span className="text-slate-400 font-medium">"Route ticket"</span>
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-start gap-2.5 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+          <AlertCircle className="w-4 h-4 text-slate-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-slate-500 leading-relaxed">
+            Static front-end demo based on the project routing design. Full
+            training, evaluation, and routing pipeline are available in the
+            GitHub implementation.
+          </p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────
 // 5. Results & Insights
 // ─────────────────────────────────────────────
 
+const RESULT_CARDS: {
+  title: string;
+  file: string;
+  tag: string;
+  tagStyle: string;
+  desc: string;
+  note: string;
+  noteIcon: LucideIcon;
+  caption: string;
+}[] = [
+  {
+    title: "Operations Overview",
+    file: "/images/dashboard_overview.png",
+    tag: "Proxy + Estimated Metrics",
+    tagStyle: "bg-amber-500/10 border border-amber-500/20 text-amber-300",
+    desc: "Shows routing-stage distribution, human triage rate, LLM invocation rate, average confidence score, estimated cost per ticket, and queue distribution across all processed tickets.",
+    note: "Human triage rate is a routing-system proxy, not a downstream escalation rate. Cost estimates are analytic, not measured from live LLM calls.",
+    noteIcon: AlertCircle,
+    caption:
+      "Routing-stage breakdown showing how tickets flow through rules, ML, LLM fallback, and human triage. Human triage rate is a proxy metric; cost figures are analytic estimates, not measured from live API calls.",
+  },
+  {
+    title: "Cost–Coverage Policy Tradeoff",
+    file: "/images/policy_tradeoff.png",
+    tag: "Estimated Analytic Metrics",
+    tagStyle: "bg-blue-500/10 border border-blue-500/20 text-blue-300",
+    desc: "Shows how confidence thresholds shift tickets between auto-routing, LLM fallback, and human review. Thresholds are operating policy choices — not just model parameters — and must be selected with risk tolerance and LLM budget in mind.",
+    note: "Computed analytically from ML confidence scores. No live LLM calls required for this sweep.",
+    noteIcon: AlertCircle,
+    caption:
+      "Threshold sweep showing how confidence cutoff selection shifts tickets between auto-routing, LLM, and human review. This operating curve is the core policy decision — computed analytically, no live LLM calls required.",
+  },
+  {
+    title: "Model Evaluation",
+    file: "/images/model_evaluation.png",
+    tag: "Measured on Holdout Data",
+    tagStyle: "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300",
+    desc: "Measured ML vs keyword baseline on 1,665 held-out metadata-derived tickets. Improved ML raises Macro-F1 from 12.1% to 33.2% vs keyword rules. ML baseline's 59.4% accuracy reflects majority-class bias; the improved model trades raw accuracy for better class balance. Limitations are transparent.",
+    note: "Labels are metadata-derived (Ticket Type field), not human-reviewed. Absolute scores remain modest and should be interpreted cautiously.",
+    noteIcon: AlertCircle,
+    caption:
+      "Supervised benchmark on 1,665 held-out tickets comparing keyword baseline, ML baseline, and improved ML. Labels are metadata-derived from the Ticket Type field — not human-reviewed gold labels. Absolute scores are modest and should be interpreted cautiously.",
+  },
+];
+
 function ResultsInsights() {
-  const cards: {
-    title: string;
-    file: string;
-    tag: string;
-    tagStyle: string;
-    desc: string;
-    note: string;
-    noteIcon: LucideIcon;
-  }[] = [
-    {
-      title: "Operations Overview",
-      file: "/images/dashboard_overview.png",
-      tag: "Proxy + Estimated Metrics",
-      tagStyle:
-        "bg-amber-500/10 border border-amber-500/20 text-amber-300",
-      desc: "Shows routing-stage distribution, human triage rate, LLM invocation rate, average confidence score, estimated cost per ticket, and queue distribution across all processed tickets.",
-      note: "Human triage rate is a routing-system proxy, not a downstream escalation rate. Cost estimates are analytic, not measured from live LLM calls.",
-      noteIcon: AlertCircle,
-    },
-    {
-      title: "Cost–Coverage Policy Tradeoff",
-      file: "/images/policy_tradeoff.png",
-      tag: "Estimated Analytic Metrics",
-      tagStyle: "bg-blue-500/10 border border-blue-500/20 text-blue-300",
-      desc: "Shows how confidence thresholds shift tickets between auto-routing, LLM fallback, and human review. Thresholds are operating policy choices — not just model parameters — and must be selected with risk tolerance and LLM budget in mind.",
-      note: "Computed analytically from ML confidence scores. No live LLM calls required for this sweep.",
-      noteIcon: AlertCircle,
-    },
-    {
-      title: "Model Evaluation",
-      file: "/images/model_evaluation.png",
-      tag: "Measured on Holdout Data",
-      tagStyle:
-        "bg-emerald-500/10 border border-emerald-500/20 text-emerald-300",
-      desc: "Measured ML vs keyword baseline on 1,665 held-out metadata-derived tickets. Improved ML raises Macro-F1 from 12.1% to 33.2% vs keyword rules. ML baseline's 59.4% accuracy reflects majority-class bias; the improved model trades raw accuracy for better class balance. Limitations are transparent.",
-      note: "Labels are metadata-derived (Ticket Type field), not human-reviewed. Absolute scores remain modest and should be interpreted cautiously.",
-      noteIcon: AlertCircle,
-    },
-  ];
+  const [activeModal, setActiveModal] = useState<(typeof RESULT_CARDS)[0] | null>(null);
+  const openModal = useCallback((card: (typeof RESULT_CARDS)[0]) => setActiveModal(card), []);
+  const closeModal = useCallback(() => setActiveModal(null), []);
 
   return (
     <section id="results" className="py-24 px-6 bg-[#080c1a]">
@@ -525,7 +923,7 @@ function ResultsInsights() {
         />
 
         <div className="mt-16 space-y-20">
-          {cards.map((card, i) => {
+          {RESULT_CARDS.map((card, i) => {
             const NoteIcon = card.noteIcon;
             const isEven = i % 2 === 0;
             return (
@@ -534,18 +932,37 @@ function ResultsInsights() {
                 className="grid lg:grid-cols-2 gap-10 items-center"
               >
                 {/* Image side */}
-                <div
-                  className={`${isEven ? "lg:order-1" : "lg:order-2"}`}
-                >
-                  <div className="rounded-2xl overflow-hidden border border-white/[0.08] bg-slate-900/60 shadow-2xl shadow-black/40">
+                <div className={`${isEven ? "lg:order-1" : "lg:order-2"}`}>
+                  <button
+                    className="w-full group relative block rounded-2xl overflow-hidden border border-white/[0.08] bg-slate-900/60 shadow-2xl shadow-black/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/60"
+                    onClick={() => openModal(card)}
+                    aria-label={`View full-size: ${card.title}`}
+                  >
                     <Image
                       src={card.file}
                       alt={card.title}
                       width={1200}
                       height={750}
-                      className="w-full h-auto"
+                      className="w-full h-auto transition-opacity duration-200 group-hover:opacity-90"
                       priority={i === 0}
                     />
+                    {/* Hover overlay */}
+                    <div className="absolute inset-0 flex items-end justify-center pb-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-black/60 border border-white/10 text-white text-xs font-medium">
+                        <ZoomIn className="w-3.5 h-3.5" />
+                        View full-size chart
+                      </span>
+                    </div>
+                  </button>
+                  {/* Always-visible affordance */}
+                  <div className="flex justify-center mt-3">
+                    <button
+                      onClick={() => openModal(card)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.10] text-slate-400 hover:text-white hover:bg-white/[0.10] hover:border-white/[0.20] transition-all text-xs font-medium"
+                    >
+                      <ZoomIn className="w-3.5 h-3.5" />
+                      View full-size chart
+                    </button>
                   </div>
                 </div>
 
@@ -574,6 +991,14 @@ function ResultsInsights() {
           })}
         </div>
       </div>
+
+      {/* Modal */}
+      {activeModal && (
+        <ImageModal
+          image={{ file: activeModal.file, title: activeModal.title, caption: activeModal.caption }}
+          onClose={closeModal}
+        />
+      )}
     </section>
   );
 }
@@ -656,7 +1081,139 @@ function ExecutiveRecommendation() {
 }
 
 // ─────────────────────────────────────────────
-// 7. Limitations & Next Steps
+// 6b. Executive Decision Memo
+// ─────────────────────────────────────────────
+
+function ExecDecisionMemo() {
+  const rows: { label: string; text: string; labelColor: string }[] = [
+    {
+      label: "Recommendation",
+      text: "Use a hybrid routing policy rather than LLM-only routing.",
+      labelColor: "text-blue-400",
+    },
+    {
+      label: "Rationale",
+      text: "Rules handle obvious cases cheaply; calibrated ML handles high-confidence routing; LLM fallback is reserved for ambiguity; human triage protects quality.",
+      labelColor: "text-violet-400",
+    },
+    {
+      label: "Operating policy",
+      text: "Choose confidence thresholds based on routing risk, agent review capacity, and LLM budget.",
+      labelColor: "text-sky-400",
+    },
+    {
+      label: "Next validation",
+      text: "Build a human-reviewed eval set, add queue-level SLA requirements, and monitor calibration/drift before production rollout.",
+      labelColor: "text-emerald-400",
+    },
+  ];
+
+  return (
+    <section id="exec-memo" className="py-20 px-6 bg-[#080c1a]">
+      <div className="max-w-4xl mx-auto">
+        <SectionHeader
+          badge="Decision Memo"
+          title="Executive Decision Memo"
+          subtitle="What I would recommend to a support operations leader."
+        />
+
+        <div className="mt-12 relative rounded-2xl overflow-hidden border border-blue-500/15">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-950/40 via-[#0d1428] to-violet-950/30" />
+          <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/[0.06] rounded-full blur-3xl pointer-events-none" />
+          <div className="relative z-10 divide-y divide-white/[0.06]">
+            {rows.map((r) => (
+              <div key={r.label} className="flex items-start gap-6 px-8 py-5">
+                <div
+                  className={`text-[11px] font-bold uppercase tracking-wider w-36 flex-shrink-0 mt-0.5 ${r.labelColor}`}
+                >
+                  {r.label}
+                </div>
+                <p className="text-sm text-slate-300 leading-relaxed">{r.text}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 7. Stakeholder View
+// ─────────────────────────────────────────────
+
+function StakeholderView() {
+  const cards: {
+    icon: LucideIcon;
+    role: string;
+    desc: string;
+    accent: string;
+    iconBg: string;
+  }[] = [
+    {
+      icon: MessageSquare,
+      role: "Support Ops",
+      desc: "Use routing-stage and queue metrics to understand review load and staffing pressure.",
+      accent: "border-sky-500/20",
+      iconBg: "bg-sky-500/10 border-sky-500/20 text-sky-400",
+    },
+    {
+      icon: BarChart3,
+      role: "Data Science",
+      desc: "Evaluate ML against keyword baselines with measured accuracy, macro-F1, weighted-F1, and per-class metrics.",
+      accent: "border-blue-500/20",
+      iconBg: "bg-blue-500/10 border-blue-500/20 text-blue-400",
+    },
+    {
+      icon: GitBranch,
+      role: "Engineering",
+      desc: "Implement configurable thresholds, safe LLM fallback, and human-triage failure handling.",
+      accent: "border-violet-500/20",
+      iconBg: "bg-violet-500/10 border-violet-500/20 text-violet-400",
+    },
+    {
+      icon: Scale,
+      role: "Leadership",
+      desc: "Use cost–coverage tradeoffs to choose an operating policy aligned with risk tolerance and LLM budget.",
+      accent: "border-emerald-500/20",
+      iconBg: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
+    },
+  ];
+
+  return (
+    <section id="stakeholder-view" className="py-20 px-6 bg-[#080c1a]">
+      <div className="max-w-6xl mx-auto">
+        <SectionHeader
+          badge="Stakeholder View"
+          title="Stakeholder View"
+          subtitle="How the analysis translates for different partners in a support operations environment."
+        />
+        <div className="mt-12 grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          {cards.map((c) => {
+            const Icon = c.icon;
+            return (
+              <div
+                key={c.role}
+                className={`bg-white/[0.04] border ${c.accent} rounded-2xl p-6 hover:bg-white/[0.06] transition-all duration-200`}
+              >
+                <div className={`inline-flex p-2.5 rounded-xl border ${c.iconBg} mb-4`}>
+                  <Icon className="w-5 h-5" />
+                </div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wide mb-2">
+                  {c.role}
+                </h3>
+                <p className="text-slate-400 leading-relaxed text-sm">{c.desc}</p>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────
+// 9. Limitations & Next Steps
 // ─────────────────────────────────────────────
 
 function LimitationsNextSteps() {
@@ -732,7 +1289,7 @@ function LimitationsNextSteps() {
 }
 
 // ─────────────────────────────────────────────
-// 8. Tech Stack
+// 10. Tech Stack
 // ─────────────────────────────────────────────
 
 function TechStack() {
@@ -750,7 +1307,7 @@ function TechStack() {
     {
       label: "AI & LLM",
       color: "text-purple-400",
-      items: ["OpenAI API", "GPT-4.1-mini", "JSON parsing", "LLM fallback"],
+      items: ["Selective LLM fallback", "Optional OpenAI API", "JSON parsing", "LLM fallback"],
     },
     {
       label: "Data Sources",
@@ -803,7 +1360,7 @@ function TechStack() {
 }
 
 // ─────────────────────────────────────────────
-// 9. Footer
+// 11. Footer
 // ─────────────────────────────────────────────
 
 function SiteFooter() {
@@ -818,6 +1375,10 @@ function SiteFooter() {
             Portfolio project · Public Kaggle data · No proprietary data · No
             production claims
           </div>
+          <div className="text-xs text-slate-600 mt-1">
+            Built with public Kaggle data. No proprietary Google data. No
+            production claims.
+          </div>
         </div>
 
         <div className="flex flex-wrap gap-3">
@@ -828,7 +1389,7 @@ function SiteFooter() {
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-violet-600 text-white text-sm font-semibold hover:from-blue-500 hover:to-violet-500 transition-all duration-200"
           >
             <ExternalLink className="w-4 h-4" />
-            GitHub Repository
+            View GitHub Implementation
           </a>
           <a
             href="https://github.com/bobaoxu2001/LLM-powered-Support-Ticket-Routing-System/blob/main/README.md"
@@ -837,7 +1398,7 @@ function SiteFooter() {
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm font-semibold hover:bg-white/10 transition-all duration-200"
           >
             <BookOpen className="w-4 h-4" />
-            README / Case Study
+            Read Technical Case Study
           </a>
         </div>
       </div>
@@ -855,9 +1416,13 @@ export default function Home() {
       <Hero />
       <BusinessChallenge />
       <WorkflowSection />
+      <BizDataScienceMapping />
       <SolutionArchitecture />
+      <RoutingSimulator />
       <ResultsInsights />
       <ExecutiveRecommendation />
+      <ExecDecisionMemo />
+      <StakeholderView />
       <LimitationsNextSteps />
       <TechStack />
       <SiteFooter />
