@@ -12,25 +12,43 @@ Built as a portfolio-grade project for **Business Data Scientist / gDATA-style**
 
 For a deeper explanation of design choices, evaluation strategy, operational tradeoffs, and limitations, see [docs/case_study.md](docs/case_study.md).
 
-## Dashboard Preview
+## Visual Preview
 
-![Dashboard Preview](assets/dashboard_preview.png)
+These previews are generated from project outputs after running the local pipeline. After `python scripts/run_pipeline.py` completes, run:
 
-> This screenshot is committed as a preview from a local run of the Streamlit dashboard using project-generated outputs. To refresh it, run `python scripts/run_pipeline.py`, relaunch `streamlit run app.py`, and save a new screenshot to `assets/dashboard_preview.png`.
+```bash
+python scripts/generate_preview_assets.py
+```
 
-The dashboard shows:
+### 1. Operations Overview
 
-| Section | What it displays |
-|---|---|
-| KPI tiles | Ticket count, human triage rate (manual review proxy), LLM invocation rate, avg confidence, estimated cost/ticket |
-| Routing Stage Breakdown | Pie chart of rule-based / ML high-confidence / LLM reasoning / human fallback shares |
-| Queue Distribution | Bar chart of final queue assignments |
-| Confidence Distribution | Histogram by routing stage |
-| Stage → Queue Flow | Parallel-categories view of routing paths |
-| Threshold Sweep | Estimated auto-route / LLM-fallback / human-fallback rates and cost vs. threshold (analytic, not measured) |
-| Measured Eval Artifacts | Accuracy, macro-F1, per-class metrics, confusion matrix — **only when `data/eval/eval_tickets.csv` exists** |
-| Human-Fallback Enrichment | Suggested resolution path, escalation flag, reason, summary — only when `--enrich-human-with-llm` was used |
-| Live Routing Demo | Paste any ticket text, route it instantly; optional "Enrich human fallback with LLM guidance" checkbox |
+> _Not yet generated. Run the pipeline then `python scripts/generate_preview_assets.py` to produce `assets/dashboard_overview.png`._
+
+Shows ticket volume, human triage rate (manual review proxy), LLM invocation rate, average routing confidence, estimated cost per ticket, routing stage distribution, and queue distribution.
+
+### 2. Cost–Coverage Policy Tradeoff
+
+> _Not yet generated. Run the pipeline then `python scripts/generate_preview_assets.py` to produce `assets/policy_tradeoff.png`._
+
+Shows how confidence thresholds shift tickets between auto-routing, LLM fallback, and human triage. These are estimated analytic metrics computed from ML confidence scores only — no LLM calls required.
+
+### 3. Model Evaluation
+
+> _Not yet generated. Run the pipeline then `python scripts/generate_preview_assets.py` to produce `assets/model_evaluation.png`._
+
+Shows measured ML-vs-keyword baseline performance on the labeled eval set: accuracy, macro-F1, weighted-F1, and per-class F1 where available. Only generated when `data/eval/eval_tickets.csv` is present.
+
+The Streamlit dashboard (`streamlit run app.py`) provides interactive versions of all panels, plus a live routing demo for pasting ticket text directly.
+
+---
+
+## What to look at
+
+- **Human Triage Rate**: manual-review load proxy; lower is better only if routing quality is maintained.
+- **LLM Invocation Rate**: cost-control metric; this project deliberately limits LLM use to low-confidence cases.
+- **ML vs Keyword Baseline**: measured test of whether ML adds signal beyond hand-written heuristics.
+- **Threshold Sweep**: estimated cost–coverage policy guide; useful for selecting an operating point, not a claim of optimality.
+- **Per-Class F1**: shows which support categories the model handles well or poorly.
 
 ---
 
@@ -154,6 +172,7 @@ These are public support datasets used to simulate a gTech-style support routing
 | `src/llm_support_routing/llm.py` | LLM classify/summarize/enrich with resilient JSON parsing and error sentinel |
 | `src/llm_support_routing/evaluation.py` | Routing KPIs, labeled-set eval vs keyword baseline, threshold sweep |
 | `scripts/run_pipeline.py` | End-to-end: load → unify → label → train → evaluate → route → export |
+| `scripts/generate_preview_assets.py` | Generate focused preview images (`assets/*.png`) from pipeline output CSVs |
 | `scripts/train_distilbert.py` | Experimental DistilBERT fine-tuning path (requires `transformers` and `datasets`; not part of the default pipeline) |
 | `app.py` | Streamlit dashboard |
 | `data/eval/eval_tickets.csv` | Committed labeled eval set (99 tickets, 6 issue types) |
@@ -233,7 +252,7 @@ The recommended threshold is a **cost–coverage policy guide**, not an automati
 streamlit run app.py
 ```
 
-See **Dashboard Preview** at the top for a full panel description.
+See **Visual Preview** above for a description of each panel. The dashboard provides interactive versions of all charts plus a live routing demo.
 
 ---
 
