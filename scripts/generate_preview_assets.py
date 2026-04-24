@@ -218,7 +218,9 @@ def generate_model_evaluation() -> bool:
     import pandas as pd
 
     eval_path = OUTPUTS / "eval_comparison.csv"
-    pc_path   = OUTPUTS / "eval_per_class_metrics.csv"
+    # Prefer supervised benchmark per-class file; fall back to compat file
+    bench_pc = OUTPUTS / "supervised_benchmark_per_class.csv"
+    pc_path  = bench_pc if bench_pc.exists() else OUTPUTS / "eval_per_class_metrics.csv"
 
     if not _require(eval_path, "model_evaluation"):
         return False
@@ -231,8 +233,9 @@ def generate_model_evaluation() -> bool:
     if ncols == 1:
         axes = [axes]
 
+    n = int(row.get("n_eval_samples", 0))
     fig.suptitle(
-        "Model Evaluation — Measured on Labeled Eval Set",
+        "Model Evaluation — Measured on metadata-derived held-out eval split",
         fontsize=13, fontweight="bold",
     )
 
@@ -272,16 +275,17 @@ def generate_model_evaluation() -> bool:
             ha="center", va="bottom", fontsize=8,
         )
 
-    n = int(row.get("n_eval_samples", 0))
-    ax.text(0.5, -0.10, f"n = {n} labeled tickets",
-            transform=ax.transAxes, ha="center", fontsize=8.5, color="#555555")
+    ax.text(0.5, -0.10, f"n_test = {n} held-out tickets  |  label source: Ticket Type metadata",
+            transform=ax.transAxes, ha="center", fontsize=8, color="#555555")
 
     # ── Per-class F1 ───────────────────────────────────────────────────────────
     if has_pc:
         pc = pd.read_csv(pc_path)
         exclude = {"macro avg", "weighted avg", "accuracy"}
         real = pc[~pc["label"].isin(exclude)]
-        ml_f1 = real[real["model"] == "ml_tfidf_lr"].set_index("label")["f1_score"]
+        # Support both model name conventions
+        ml_mask = real["model"].isin({"ml_tfidf_lr", "ml_improved"})
+        ml_f1 = real[ml_mask].set_index("label")["f1_score"]
         kw_f1 = real[real["model"] == "keyword_baseline"].set_index("label")["f1_score"]
         all_labels = sorted(set(ml_f1.index) | set(kw_f1.index))
 
