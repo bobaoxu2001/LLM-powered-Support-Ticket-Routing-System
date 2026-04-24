@@ -40,7 +40,9 @@ Supervised benchmark on 1,665 held-out tickets (stratified 80/20 split from 8,32
 | ML baseline (TF-IDF unigrams + LR) | 59.4% | 26.0% | 45.4% |
 | ML improved (TF-IDF bigrams + char n-grams + balanced LR) | 39.3% | **33.2%** | 41.1% |
 
-**ML slightly outperforms the keyword baseline on held-out metadata-derived benchmark (macro-F1 +21 pp).** ML baseline's high accuracy (59%) reflects predicting the majority class (billing); the improved model trades raw accuracy for better class balance. The Kaggle dataset uses template-generated descriptions that are not strongly correlated with ticket type — absolute scores should be interpreted as upper bounds under weak label signal, not a reflection of real-world routing quality.
+**The improved lightweight ML benchmark outperforms the keyword baseline across accuracy, macro-F1, and weighted-F1 on the held-out metadata-derived benchmark, while absolute scores remain modest and should be interpreted cautiously.** ML baseline's high accuracy (59%) reflects predicting the majority class (billing); the improved model trades raw accuracy for better class balance. The public Kaggle ticket dataset contains templated fields and metadata-derived labels, which may not fully reflect real production support traffic.
+
+The supervised benchmark uses the classes reliably present in the structured Kaggle Ticket Type metadata (`billing`, `technical`, `other`). The broader routing taxonomy supports six issue types, but not all classes are reliably represented in this raw metadata source.
 
 The Streamlit dashboard (`streamlit run app.py`) provides interactive versions of all panels, plus a live routing demo for pasting ticket text directly.
 
@@ -63,11 +65,12 @@ The Streamlit dashboard (`streamlit run app.py`) provides interactive versions o
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
 
-# 2. Set credentials (Kaggle required for --download; OpenAI required for LLM stages)
+# 2. Set credentials (Kaggle required for --download; OpenAI only needed for LLM fallback/enrichment stages)
+#    OpenAI is NOT required for benchmark generation or threshold sweep.
 export KAGGLE_USERNAME="your_username"
 export KAGGLE_KEY="your_key"
-export OPENAI_API_KEY="your_openai_key"
-export OPENAI_MODEL="gpt-4.1-mini"   # optional, defaults to gpt-4.1-mini
+export OPENAI_API_KEY="your_openai_key"   # optional — only needed if LLM fallback or --enrich-human-with-llm is invoked
+export OPENAI_MODEL="gpt-4.1-mini"        # optional, defaults to gpt-4.1-mini
 
 # 3. Run the full pipeline (downloads data, trains, routes, exports artifacts)
 python scripts/run_pipeline.py --download
@@ -179,7 +182,7 @@ These are public support datasets used to simulate a gTech-style support routing
 | `scripts/generate_preview_assets.py` | Generate focused preview images (`assets/*.png`) from pipeline output CSVs |
 | `scripts/train_distilbert.py` | Experimental DistilBERT fine-tuning path (requires `transformers` and `datasets`; not part of the default pipeline) |
 | `app.py` | Streamlit dashboard |
-| `data/eval/eval_tickets.csv` | Metadata-derived labeled eval set (399 tickets, 6 issue types): 99 manually-written rows + 300 rows from structured Ticket Type metadata |
+| `data/eval/eval_tickets.csv` | Metadata-derived labeled eval set (399 tickets): original 99-row eval subset plus 300 metadata-derived rows from structured Ticket Type fields |
 | `data/eval/eval_set_summary.csv` | Per-class, per-source breakdown of the eval set |
 | `scripts/build_eval_set.py` | Script that builds the expanded eval set from Kaggle metadata |
 | `scripts/run_supervised_benchmark.py` | Clean supervised benchmark: TF-IDF + LR models vs keyword baseline, stratified train/test split, metadata-derived labels |
@@ -243,8 +246,8 @@ The recommended threshold is a **cost–coverage policy guide**, not an automati
 
 ## What the results show
 
-- **Supervised benchmark** (`scripts/run_supervised_benchmark.py`): a clean supervised benchmark using the full Kaggle ticket dataset (8,325 deduplicated rows after removing synthetic duplicates). Labels come from `Ticket Type` metadata only. Train/test split is stratified 80/20 (random_state=42). Three classes present in the raw data: `billing`, `technical`, `other`. ML improved (TF-IDF bigrams + char n-grams, balanced LR) achieves macro-F1 0.33 vs keyword baseline 0.12 on 1,665 held-out test tickets. ML baseline's accuracy (59%) reflects majority-class dominance (billing = 60% of data); the improved model's class-balanced training improves macro-F1 at the cost of raw accuracy. Absolute scores are limited by the synthetic nature of the Kaggle text.
-- **ML vs keyword baseline**: ML slightly outperforms keyword baseline on held-out metadata-derived benchmark. Keyword rules are too sparse for this dataset — designed for conversational patterns, not templated ticket descriptions.
+- **Supervised benchmark** (`scripts/run_supervised_benchmark.py`): a clean supervised benchmark using the full Kaggle ticket dataset (8,325 deduplicated rows). Labels come from `Ticket Type` metadata only — not model predictions or keyword heuristics. Train/test split is stratified 80/20 (random_state=42). The benchmark covers the classes reliably present in the structured Kaggle Ticket Type metadata (`billing`, `technical`, `other`); the broader routing taxonomy supports six issue types, but not all are reliably represented in this raw metadata source. ML improved (TF-IDF bigrams + char n-grams, balanced LR) achieves macro-F1 0.33 vs keyword baseline 0.12 on 1,665 held-out test tickets. The improved lightweight ML benchmark outperforms the keyword baseline across accuracy, macro-F1, and weighted-F1, while absolute scores remain modest and should be interpreted cautiously. The public Kaggle ticket dataset contains templated fields and metadata-derived labels, which may not fully reflect real production support traffic.
+- **ML vs keyword baseline**: the improved ML model outperforms the keyword baseline on held-out metadata-derived benchmark. Keyword rules are too sparse for this dataset — designed for conversational patterns, not templated ticket descriptions.
 - **Threshold sweep**: changing `high_threshold` and `low_threshold` shifts tickets between auto-route, LLM-classification, and human-triage buckets, making cost–coverage tradeoffs explicit across an operating curve.
 - **`human_triage_rate`** is a routing-system metric — the fraction of tickets routed to `human_triage_queue`. It is a manual-review proxy, not a downstream escalation rate. True escalation would require tracking outcomes after human review.
 - **`complexity`** is a word-count heuristic proxy (`low` / `medium` / `high`), not independently annotated semantic complexity.
@@ -253,7 +256,7 @@ The recommended threshold is a **cost–coverage policy guide**, not an automati
 
 ## Key takeaways
 
-- ML routing is evaluated against keyword-only routing on a clean supervised benchmark (1,665 held-out tickets from the Kaggle dataset). Labels are from structured `Ticket Type` metadata — not model predictions or keyword heuristics. ML outperforms keyword baseline on macro-F1 (0.33 vs 0.12). Absolute accuracy is limited by synthetic Kaggle text that doesn't strongly correlate with ticket type; future work should include a human-reviewed eval set for more reliable per-class signal.
+- ML routing is evaluated against keyword-only routing on a clean supervised benchmark (1,665 held-out tickets from the Kaggle dataset). Labels are from structured `Ticket Type` metadata — not model predictions or keyword heuristics. The improved lightweight ML benchmark outperforms the keyword baseline across accuracy, macro-F1, and weighted-F1 on the held-out metadata-derived benchmark, while absolute scores remain modest and should be interpreted cautiously. The public Kaggle ticket dataset contains templated fields and metadata-derived labels, which may not fully reflect real production support traffic; future work should include a human-reviewed eval set for more reliable per-class signal.
 - Threshold tuning meaningfully shifts the auto-route / LLM-call / human-review split — making that tradeoff explicit is the point.
 - LLM usage is deliberately limited to low-confidence cases to control API cost and reduce unnecessary calls.
 - Human fallback is the safety layer: ambiguous cases and LLM failures route to `human_triage_queue` rather than silently misfiring.
