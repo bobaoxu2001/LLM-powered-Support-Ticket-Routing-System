@@ -1,44 +1,68 @@
-# Case Study: Support Ticket Routing System
+# Case Study: Support Operations Ticket Routing (Portfolio Prototype)
 
-## Business problem
-Support organizations need fast first-touch routing so tickets reach the right specialist queue quickly. Pure manual triage is expensive and inconsistent; pure automation is risky for ambiguous cases.
+## 1) Business Problem
+Support teams need to route incoming cases quickly and accurately so customers reach the right specialist queue with minimal delay. In practice, teams must balance three competing objectives:
+- routing quality,
+- manual review load,
+- and LLM usage cost.
 
-## System design
-This project implements a staged routing cascade:
-1. Rule-based patterns for deterministic fast-path tickets.
-2. Calibrated ML classifier for high-confidence auto-routing.
-3. LLM classification only for low-confidence cases.
-4. Human triage fallback for uncertainty and LLM failures.
+This project simulates a **gTech / Google Ads-style support operations workflow** using **public support datasets only**. It does **not** use proprietary Google data.
 
-This design keeps high-confidence automation while preserving safety for edge cases.
+## 2) Why Not LLM-only?
+An LLM-only design is flexible, but it is not always the most reliable or cost-efficient operating policy.
 
-## Why not LLM-only
-An LLM-only approach can increase cost variance, latency variance, and operational unpredictability. Here, LLM is scoped to the low-confidence segment so deterministic and ML paths handle the majority of traffic where possible.
+- **Rules** are cheapest and safest for deterministic patterns.
+- **Calibrated ML** is cheaper and scalable for frequent, repeatable patterns.
+- **LLM classification** is most useful for low-confidence ambiguity.
+- **Human triage** protects the system against uncertain predictions and failure modes.
 
-## Data strategy
-- Inbound customer-authored Twitter messages only (agent messages filtered out).
-- Structured ticket dataset mapped from `Ticket Type` and `Ticket Priority` into issue/urgency labels.
-- `label_source` captures real vs weak label provenance.
-- Deduplication prioritizes real-labeled rows when duplicate descriptions exist.
+The result is a selective-LLM architecture rather than an all-LLM architecture.
 
-## Evaluation strategy
-- Train/test and cross-validation metrics during model training.
-- Measured eval set comparison: ML vs keyword baseline.
-- Per-class metrics and confusion matrix artifacts for class-level visibility.
-- Explicit separation of measured metrics vs estimated policy metrics.
+## 3) System Design
+The routing cascade is:
+1. **Rule-based exact patterns**
+2. **Calibrated TF-IDF + Logistic Regression** for high-confidence auto-routing
+3. **LLM classification** for low-confidence cases
+4. **Human triage** for middle-confidence uncertainty or failed LLM calls
 
-## Operational tradeoffs
-- Threshold sweep estimates coverage/cost/human-triage tradeoffs.
-- A recommendation score is provided as an analytic policy guide (not a guaranteed optimum).
-- Estimated cost depends on model/pricing assumptions and should be revisited for production.
+For human-fallback tickets, optional enrichment hooks exist for summary, suggested path, escalation flag, and reason.
 
-## Limitations
-- Complexity label is a heuristic proxy, not hand-labeled ground truth.
-- Estimated costs and threshold policy simulations are not online A/B outcomes.
-- Current evaluation depends on available labeled eval samples; larger gold sets improve reliability.
+## 4) Data Strategy
+- **Customer Support on Twitter** contributes noisy, real customer-authored language.
+- **Structured support ticket data** contributes `Ticket Type` / `Ticket Priority` metadata.
+- Twitter messages are filtered to **inbound customer-authored** content.
+- Label provenance is preserved (`real` vs `weak`).
+- Issue/urgency labels can come from real metadata mapping or weak fallback logic.
+- **Complexity is a word-count heuristic proxy**, not semantic ground truth.
 
-## Next steps
-1. Expand gold-labeled eval set and add queue-level SLA-weighted metrics.
-2. Add reliability/calibration plots to pair with threshold policy guidance.
-3. Add run metadata/versioning for stronger reproducibility.
-4. Track latency and cost telemetry from real runtime traces.
+## 5) Evaluation Strategy
+Evaluation is designed to show incremental signal over simple heuristics:
+- ML vs keyword baseline comparison
+- accuracy, macro-F1, weighted-F1
+- per-class metrics
+- confusion matrix outputs
+- threshold sweep for policy analysis
+- explicit separation of **measured vs estimated vs proxy** metrics
+
+## 6) Operational Tradeoffs
+This system is intended for policy discussion, not one-click automation claims:
+- auto-route coverage
+- LLM invocation rate
+- human-triage/manual-review rate
+- estimated LLM cost per ticket
+- threshold recommendation as an **analytic cost–coverage policy guide** (not “optimal,” not automatically enforced)
+
+## 7) Limitations
+- Data is public support data, not Google Ads proprietary data.
+- Eval reliability is bounded by eval-set size unless expanded.
+- No true production AHT or downstream escalation outcome tracking in this repo.
+- Complexity is heuristic, not annotated semantic truth.
+- Threshold recommendation currently is not accuracy-aware by queue.
+- LLM outputs still require monitoring and human review.
+
+## 8) Next Steps
+1. Expand manually reviewed eval coverage with a larger labeled set.
+2. Add queue-specific SLA-aware threshold policies.
+3. Add reliability/calibration plots.
+4. Benchmark latency across routing stages.
+5. Persist richer model/run metadata for reproducibility.

@@ -146,7 +146,7 @@ with policy_tab:
     st.subheader("Policy Simulation (Estimated) + Live Routing Demo")
     st.caption(
         "Threshold sweep metrics are estimated from model confidence distributions and pricing assumptions; "
-        "use as a policy guide, not an optimal threshold claim."
+        "use as a policy guide, not an automatically applied threshold setting."
     )
 
     # ── Threshold sweep ───────────────────────────────────────────────────────

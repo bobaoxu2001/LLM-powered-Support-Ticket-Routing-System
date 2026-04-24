@@ -2,7 +2,7 @@
 
 Author: **Allen Xu**
 
-An end-to-end **support operations routing system** that combines deterministic rules, calibrated ML classifiers, and LLM fallback to route tickets into operational queues with human-safe escalation.
+An end-to-end **support operations routing system** that combines deterministic rules, calibrated ML classifiers, and LLM fallback to route tickets into operational queues with human-safe fallback.
 
 This repository is designed as a portfolio-grade, interview-ready project for **Business Data Scientist / gDATA-style** roles: it emphasizes measurable lift over baselines, operating-threshold tradeoffs, and cost-aware decisioning.
 
@@ -24,10 +24,14 @@ This implementation now includes capabilities that are often missing in portfoli
 - **Inbound-only customer training data** from Twitter (agent messages filtered out).
 - **Real label extraction** from structured ticket fields (`Ticket Type`, `Ticket Priority`) instead of pure synthetic heuristics.
 - **Baseline comparison**: ML vs keyword heuristic on a labeled eval set.
-- **Confidence-threshold sweep with recommendation score** to expose coverage/cost/human-escalation tradeoffs.
+- **Confidence-threshold sweep with recommendation score** to expose coverage/cost/human-triage tradeoffs.
 - **Calibrated confidence scores** (isotonic calibration) for routing thresholds.
 - **Batched model inference** for routing throughput efficiency.
 - **LLM failure safety**: classification parse/API failures fall back to `human_triage_queue`.
+
+
+### Case Study
+For a deeper explanation of design choices, evaluation strategy, tradeoffs, and limitations, see `docs/case_study.md`.
 
 ---
 
@@ -174,6 +178,7 @@ If `data/eval/eval_tickets.csv` exists, pipeline reports:
 This directly answers: **Does ML add signal over hand-written keywords?** and makes class-level tradeoffs inspectable.
 
 If the eval set is not present, the pipeline skips this block and removes stale eval CSVs from prior runs to avoid misleading dashboards.
+For an expansion workflow toward ~500 rows without fabricating labels, see `docs/eval_set_expansion_plan.md`.
 
 ### C) Confidence threshold sweep (**estimated**)
 Generates operating curve over thresholds (0.50 to 0.95):
@@ -191,6 +196,12 @@ This supports business decisions around cost vs automation coverage vs risk whil
 ### D) Metric semantics cheat sheet
 - **Measured**: values computed from labeled ground truth (e.g., `ml_macro_f1` in `eval_comparison.csv`).
 - **Estimated**: values derived from assumptions/confidence distributions (e.g., `cost_per_ticket_usd_estimated` in `threshold_sweep.csv` / `routing_metrics.csv`).
+
+## Dashboard Preview
+
+A static preview image can be stored at `assets/dashboard_preview.png` if you generate one locally.
+
+> The screenshot is a demo preview. For fresh outputs, run the pipeline locally and relaunch Streamlit.
 
 ## Dashboard
 
@@ -217,8 +228,7 @@ Dashboard includes:
 ## Visual assets
 
 - If `assets/dashboard_preview.png` exists in your local repo, keep it as the static dashboard preview.
-- Optional local demo screenshot (not committed by default):
-  `![Live routing demo (generate locally)](assets/live_routing_demo.png)`
+- Optional local demo asset: `assets/live_routing_demo.png` (generate locally if desired).
 
 To generate `assets/live_routing_demo.png` locally, run the dashboard (`streamlit run app.py`) and capture the live routing section after entering a sample ticket.
 
