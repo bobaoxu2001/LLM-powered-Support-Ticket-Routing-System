@@ -11,10 +11,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from llm_support_routing.config import MODELS_DIR, OUTPUTS_DIR
+from llm_support_routing.config import MODELS_DIR, OUTPUTS_DIR, RoutingThresholds
 
 st.set_page_config(page_title="LLM Support Ticket Routing", layout="wide")
 st.title("LLM-powered Support Ticket Routing Dashboard")
+st.caption(
+    "Support operations routing system (not a chatbot): rules → calibrated ML → "
+    "low-confidence LLM classification → human triage."
+)
 
 metrics_path = OUTPUTS_DIR / "routing_metrics.csv"
 routed_path = OUTPUTS_DIR / "routed_tickets.csv"
@@ -69,42 +73,63 @@ st.plotly_chart(
     use_container_width=True,
 )
 
-# ── Route distribution ────────────────────────────────────────────────────────
-st.subheader("Queue Distribution")
-route_counts = routed["route"].value_counts().reset_index()
-route_counts.columns = ["route", "count"]
-st.plotly_chart(px.bar(route_counts, x="route", y="count", color="route"), use_container_width=True)
+with ops_tab:
+    st.subheader("Routing Operations Overview")
+    st.caption(
+        "These KPIs reflect production-style routing behavior. "
+        "`human_fallback_rate` is shown as human-triage rate (not a true escalation metric)."
+    )
 
-# ── Urgency breakdown (if column present) ────────────────────────────────────
-if "llm_urgency" in routed.columns and routed["llm_urgency"].ne("").any():
-    st.subheader("Urgency Distribution")
-    urg = routed[routed["llm_urgency"].ne("")]["llm_urgency"].value_counts().reset_index()
-    urg.columns = ["urgency", "count"]
-    order = ["critical", "high", "medium", "low"]
-    urg["urgency"] = pd.Categorical(urg["urgency"], categories=order, ordered=True)
-    urg = urg.sort_values("urgency")
+    # ── KPI tiles ────────────────────────────────────────────────────────────
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Tickets", int(metrics["tickets"]))
+    col2.metric("Human Triage Rate", f"{metrics['human_fallback_rate']:.2%}")
+    col3.metric("LLM Invocation Rate", f"{metrics['llm_invocation_rate']:.2%}")
+    col4.metric("Avg Routing Confidence", f"{metrics.get('avg_routing_confidence', 0):.2%}")
+    est_cost = metrics.get("cost_per_ticket_usd_estimated", metrics.get("cost_per_ticket_usd", 0.0))
+    col5.metric("Est. Cost / Ticket (USD)", f"${est_cost:.5f}")
+
+    st.info(
+        "Metric semantics: measured = labeled-ground-truth evaluation; estimated = policy/cost approximations; "
+        "proxy = heuristic-derived labels (e.g., complexity)."
+    )
+
+    # ── Stage breakdown ───────────────────────────────────────────────────────
+    st.subheader("Routing Stage Breakdown")
+    stage_counts = routed["stage"].value_counts().reset_index()
+    stage_counts.columns = ["stage", "count"]
     st.plotly_chart(
-        px.bar(urg, x="urgency", y="count", color="urgency",
-               color_discrete_map={"critical": "#d62728", "high": "#ff7f0e",
-                                   "medium": "#2ca02c", "low": "#1f77b4"}),
+        px.pie(stage_counts, names="stage", values="count", hole=0.4),
         use_container_width=True,
     )
 
-# ── Confidence histogram ──────────────────────────────────────────────────────
-st.subheader("Confidence Distribution by Stage")
-st.plotly_chart(
-    px.histogram(routed, x="confidence", color="stage", nbins=40, barmode="overlay", opacity=0.7),
-    use_container_width=True,
-)
+    # ── Route distribution ────────────────────────────────────────────────────
+    st.subheader("Queue Distribution")
+    route_counts = routed["route"].value_counts().reset_index()
+    route_counts.columns = ["route", "count"]
+    st.plotly_chart(px.bar(route_counts, x="route", y="count", color="route"), use_container_width=True)
 
-# ── Routing flow ──────────────────────────────────────────────────────────────
-st.subheader("Routing Flow (Stage → Queue)")
-flow = routed.groupby(["stage", "route"], as_index=False).size()
-st.plotly_chart(
-    px.parallel_categories(flow, dimensions=["stage", "route"], color="size",
-                           color_continuous_scale=px.colors.sequential.Viridis),
-    use_container_width=True,
-)
+    # ── Urgency breakdown (if column present) ────────────────────────────────
+    if "llm_urgency" in routed.columns and routed["llm_urgency"].ne("").any():
+        st.subheader("Urgency Distribution")
+        urg = routed[routed["llm_urgency"].ne("")]["llm_urgency"].value_counts().reset_index()
+        urg.columns = ["urgency", "count"]
+        order = ["critical", "high", "medium", "low"]
+        urg["urgency"] = pd.Categorical(urg["urgency"], categories=order, ordered=True)
+        urg = urg.sort_values("urgency")
+        st.plotly_chart(
+            px.bar(urg, x="urgency", y="count", color="urgency",
+                   color_discrete_map={"critical": "#d62728", "high": "#ff7f0e",
+                                       "medium": "#2ca02c", "low": "#1f77b4"}),
+            use_container_width=True,
+        )
+
+    # ── Confidence histogram ──────────────────────────────────────────────────
+    st.subheader("Confidence Distribution by Stage")
+    st.plotly_chart(
+        px.histogram(routed, x="confidence", color="stage", nbins=40, barmode="overlay", opacity=0.7),
+        use_container_width=True,
+    )
 
 # ── Threshold sweep (estimated — no live LLM calls) ──────────────────────────
 if sweep_path.exists():
@@ -121,7 +146,6 @@ if sweep_path.exists():
         labels={"threshold_high": "High-confidence threshold", "value": "Rate (estimated)", "variable": ""},
         title="Estimated routing stage rates vs. confidence threshold",
     )
-    st.plotly_chart(fig_sweep, use_container_width=True)
 
     _cost_col = "cost_per_ticket_usd_estimated" if "cost_per_ticket_usd_estimated" in sweep.columns else "est_cost_per_ticket_usd"
     if _cost_col in sweep.columns:

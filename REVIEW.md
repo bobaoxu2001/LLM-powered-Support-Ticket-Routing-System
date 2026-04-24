@@ -68,7 +68,7 @@ Two distinct LLM uses are correctly separated:
 - Interactive live routing demo helps interviewers quickly validate behavior.
 - Tests cover key data/routing/evaluation logic and regressions.
 
----
+### Priority 2 — Calibration evidence in artifacts
 
 ## Remaining gaps to close for top-tier interview readiness
 

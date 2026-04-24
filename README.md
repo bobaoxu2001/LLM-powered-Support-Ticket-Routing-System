@@ -6,7 +6,7 @@ An end-to-end **support operations routing system** that combines deterministic 
 
 Built as a portfolio-grade project for **Business Data Scientist / gDATA-style** roles, emphasizing measurable lift over baselines, operating-threshold tradeoffs, and cost-aware decisioning.
 
----
+### Routing stages
 
 ## Dashboard Preview
 
@@ -152,7 +152,7 @@ Urgency appends `_priority` to queues (e.g., `billing_queue_priority`) for `high
 | `app.py` | Streamlit dashboard |
 | `data/eval/eval_tickets.csv` | Committed labeled eval set (100 rows, 6 issue types) |
 
----
+> You can add `assets/dashboard_preview.png` after running the pipeline locally and relaunching Streamlit.
 
 ## Artifacts generated
 
