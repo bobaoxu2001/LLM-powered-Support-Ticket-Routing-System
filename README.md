@@ -12,7 +12,7 @@ Built as a portfolio-grade project for **Business Data Scientist / gDATA-style**
 
 ![Dashboard Preview](assets/dashboard_preview.png)
 
-> **Note:** The image above uses illustrative synthetic data. Run `streamlit run app.py` after the pipeline to see real outputs. To update this image, save a screenshot to `assets/dashboard_preview.png`.
+> **Note:** The dashboard preview is for demonstration. Run `streamlit run app.py` after the pipeline to view outputs from your local run. To update this image, save a screenshot to `assets/dashboard_preview.png`.
 
 The dashboard shows:
 
