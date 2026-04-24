@@ -20,6 +20,9 @@ metrics_path = OUTPUTS_DIR / "routing_metrics.csv"
 routed_path = OUTPUTS_DIR / "routed_tickets.csv"
 report_path = OUTPUTS_DIR / "training_report.txt"
 sweep_path = OUTPUTS_DIR / "threshold_sweep.csv"
+eval_summary_path = OUTPUTS_DIR / "eval_comparison.csv"
+eval_per_class_path = OUTPUTS_DIR / "eval_per_class_metrics.csv"
+eval_confusion_path = OUTPUTS_DIR / "eval_confusion_matrix.csv"
 model_path = MODELS_DIR / "issue_type_tfidf_lr.joblib"
 urgency_model_path = MODELS_DIR / "urgency_tfidf_lr.joblib"
 
@@ -30,15 +33,32 @@ if not metrics_path.exists() or not routed_path.exists():
 metrics = pd.read_csv(metrics_path).iloc[0].to_dict()
 routed = pd.read_csv(routed_path)
 
+st.caption(
+    "**Note:** Measured eval artifacts (accuracy, F1, confusion matrix) appear only when "
+    "`data/eval/eval_tickets.csv` exists. Threshold recommendations are analytic estimates "
+    "based on ML confidence distribution and are not automatically applied."
+)
+
 # ── KPI tiles ────────────────────────────────────────────────────────────────
 col1, col2, col3, col4, col5 = st.columns(5)
 human_triage_rate = metrics.get("human_triage_rate", metrics.get("escalation_rate", 0.0))
 col1.metric("Tickets", int(metrics["tickets"]))
-col2.metric("Human Triage Rate", f"{human_triage_rate:.2%}",
-            help="Fraction routed to human_triage_queue (routing proxy, not true escalation rate)")
-col3.metric("LLM Invocation", f"{metrics['llm_invocation_rate']:.2%}")
+col2.metric(
+    "Human Triage Rate",
+    f"{human_triage_rate:.2%}",
+    help="Fraction routed to human_triage_queue — manual review / fallback rate. "
+         "This is a routing proxy, not a true production escalation rate.",
+)
+col3.metric("LLM Invocation", f"{metrics['llm_invocation_rate']:.2%}",
+            help="Fraction of tickets sent to the LLM classification stage (low-confidence band).")
 col4.metric("Avg Confidence", f"{metrics.get('avg_routing_confidence', 0):.2%}")
-col5.metric("Cost / Ticket (USD)", f"${metrics['cost_per_ticket_usd']:.5f}")
+est_cost = metrics.get("cost_per_ticket_usd_estimated", metrics.get("cost_per_ticket_usd", 0.0))
+col5.metric(
+    "Est. Cost / Ticket (USD)",
+    f"${est_cost:.5f}",
+    help="Estimated cost based on LLM invocation rate × per-call cost + fixed infra cost. "
+         "Not measured billing.",
+)
 
 # ── Stage breakdown ───────────────────────────────────────────────────────────
 st.subheader("Routing Stage Breakdown")
@@ -86,34 +106,43 @@ st.plotly_chart(
     use_container_width=True,
 )
 
-# ── Threshold sweep ───────────────────────────────────────────────────────────
+# ── Threshold sweep (estimated — no live LLM calls) ──────────────────────────
 if sweep_path.exists():
-    st.subheader("Confidence Threshold Sweep (Cost–Coverage Tradeoff)")
+    st.subheader("Confidence Threshold Sweep — Cost–Coverage Tradeoff (Estimated)")
     sweep = pd.read_csv(sweep_path)
+    _rate_cols = [c for c in ["auto_routed_rate_estimated", "llm_fallback_rate_estimated",
+                               "human_fallback_rate_estimated"] if c in sweep.columns]
+    if not _rate_cols:
+        _rate_cols = [c for c in ["auto_routed_rate", "llm_fallback_rate", "human_fallback_rate"]
+                      if c in sweep.columns]
     fig_sweep = px.line(
-        sweep.melt(id_vars="threshold_high",
-                   value_vars=["auto_routed_rate", "llm_fallback_rate", "human_fallback_rate"]),
+        sweep.melt(id_vars="threshold_high", value_vars=_rate_cols),
         x="threshold_high", y="value", color="variable",
-        labels={"threshold_high": "High-confidence threshold", "value": "Rate", "variable": ""},
-        title="Routing stage rates vs. confidence threshold",
+        labels={"threshold_high": "High-confidence threshold", "value": "Rate (estimated)", "variable": ""},
+        title="Estimated routing stage rates vs. confidence threshold",
     )
     st.plotly_chart(fig_sweep, use_container_width=True)
 
-    fig_cost = px.line(
-        sweep, x="threshold_high", y="cost_per_ticket_usd_estimated",
-        labels={"threshold_high": "High-confidence threshold", "cost_per_ticket_usd_estimated": "Est. cost / ticket (USD)"},
-        title="Estimated cost per ticket vs. confidence threshold",
-    )
-    st.plotly_chart(fig_cost, use_container_width=True)
+    _cost_col = "cost_per_ticket_usd_estimated" if "cost_per_ticket_usd_estimated" in sweep.columns else "est_cost_per_ticket_usd"
+    if _cost_col in sweep.columns:
+        fig_cost = px.line(
+            sweep, x="threshold_high", y=_cost_col,
+            labels={"threshold_high": "High-confidence threshold", _cost_col: "Est. cost / ticket (USD)"},
+            title="Estimated cost per ticket vs. confidence threshold",
+        )
+        st.plotly_chart(fig_cost, use_container_width=True)
 
     if "is_recommended_threshold" in sweep.columns and sweep["is_recommended_threshold"].any():
         rec = sweep[sweep["is_recommended_threshold"]].iloc[0]
         st.info(
-            f"Recommended threshold (estimated): high={rec['threshold_high']:.2f}, low={rec['threshold_low']:.2f}, "
-            f"auto-route={rec['auto_routed_rate_estimated']:.1%}, human-fallback={rec['human_fallback_rate_estimated']:.1%}"
+            f"**Analytic recommendation** (cost–coverage guide, not automatically applied): "
+            f"high={rec['threshold_high']:.2f}, low={rec['threshold_low']:.2f} — "
+            f"auto-route≈{rec['auto_routed_rate_estimated']:.1%}, "
+            f"human-fallback≈{rec['human_fallback_rate_estimated']:.1%}. "
+            f"Apply via `--high-threshold` / `--low-threshold`."
         )
 
-# ── Evaluation artifacts (measured on labeled eval set) ─────────────────────
+# ── Evaluation artifacts (measured on labeled eval set) ──────────────────────
 if eval_summary_path.exists():
     st.subheader("Labeled Eval Set: ML vs Keyword Baseline (Measured)")
     eval_summary = pd.read_csv(eval_summary_path)
@@ -122,7 +151,8 @@ if eval_summary_path.exists():
 if eval_per_class_path.exists():
     st.subheader("Per-Class Metrics (Measured)")
     per_class = pd.read_csv(eval_per_class_path)
-    display_cols = ["model", "label", "precision", "recall", "f1_score", "support"]
+    display_cols = [c for c in ["model", "label", "precision", "recall", "f1_score", "support"]
+                    if c in per_class.columns]
     st.dataframe(per_class[display_cols], use_container_width=True)
 
 if eval_confusion_path.exists():
@@ -137,14 +167,16 @@ if eval_confusion_path.exists():
         use_container_width=True,
     )
 
-
 if not eval_summary_path.exists() and not eval_per_class_path.exists() and not eval_confusion_path.exists():
-    st.caption("Measured eval artifacts not found. Add `data/eval/eval_tickets.csv` and rerun pipeline to generate them.")
+    st.caption(
+        "Measured eval artifacts not found. Add `data/eval/eval_tickets.csv` "
+        "and rerun the pipeline to generate them."
+    )
 
 # ── Human-fallback enrichment (shown when --enrich-human-with-llm was used) ──
 enrich_cols = ["suggested_path", "should_escalate", "reason"]
 if all(c in routed.columns for c in enrich_cols) and routed[enrich_cols[0]].ne("").any():
-    st.subheader("Human-Fallback Enrichment (LLM Resolution Guidance)")
+    st.subheader("Human-Fallback Enrichment — LLM Resolution Guidance")
     enriched = routed[routed["stage"] == "human_fallback"][
         ["text", "confidence", "llm_urgency"] + enrich_cols + ["llm_summary"]
     ].copy()
@@ -177,9 +209,9 @@ if model_path.exists():
     enrich_live = st.checkbox(
         "Enrich human fallback with LLM guidance",
         value=False,
-        help="If the ticket lands in human_fallback, call llm_resolution_and_escalation() "
-             "and llm_summarize_ticket(). Requires a configured OPENAI_API_KEY and incurs "
-             "an extra LLM call.",
+        help="If the ticket lands in human_fallback, calls llm_resolution_and_escalation() "
+             "and llm_summarize_ticket(). Requires a configured OPENAI_API_KEY; incurs one "
+             "extra LLM call.",
     )
     if st.button("Route") and ticket_text.strip():
         with st.spinner("Routing..."):
@@ -195,7 +227,11 @@ if model_path.exists():
         cols[1].metric("Confidence", f"{decision.confidence:.2%}")
         cols[2].metric("Issue Type", decision.metadata.get("issue_type", "—"))
         if decision.metadata.get("urgency"):
-            st.info(f"Urgency: **{decision.metadata['urgency']}** | Complexity: **{decision.metadata.get('complexity', '—')}**")
+            st.info(
+                f"Urgency: **{decision.metadata['urgency']}**"
+                + (f" | Complexity: **{decision.metadata['complexity']}**"
+                   if decision.metadata.get("complexity") else "")
+            )
         if decision.stage == "human_fallback" and decision.metadata.get("suggested_path"):
             st.subheader("LLM Resolution Guidance")
             g1, g2 = st.columns(2)
