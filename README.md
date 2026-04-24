@@ -14,29 +14,25 @@ For a deeper explanation of design choices, evaluation strategy, operational tra
 
 ## Visual Preview
 
-These previews are generated from project outputs after running the local pipeline. After `python scripts/run_pipeline.py` completes, run:
-
-```bash
-python scripts/generate_preview_assets.py
-```
+These previews are generated from real project outputs after running the local pipeline.
 
 ### 1. Operations Overview
 
-> _Not yet generated. Run the pipeline then `python scripts/generate_preview_assets.py` to produce `assets/dashboard_overview.png`._
+![Operations Overview](assets/dashboard_overview.png)
 
 Shows ticket volume, human triage rate (manual review proxy), LLM invocation rate, average routing confidence, estimated cost per ticket, routing stage distribution, and queue distribution.
 
 ### 2. Cost–Coverage Policy Tradeoff
 
-> _Not yet generated. Run the pipeline then `python scripts/generate_preview_assets.py` to produce `assets/policy_tradeoff.png`._
+![Cost–Coverage Policy Tradeoff](assets/policy_tradeoff.png)
 
 Shows how confidence thresholds shift tickets between auto-routing, LLM fallback, and human triage. These are estimated analytic metrics computed from ML confidence scores only — no LLM calls required.
 
 ### 3. Model Evaluation
 
-> _Not yet generated. Run the pipeline then `python scripts/generate_preview_assets.py` to produce `assets/model_evaluation.png`._
+![Model Evaluation](assets/model_evaluation.png)
 
-Shows measured ML-vs-keyword baseline performance on the labeled eval set: accuracy, macro-F1, weighted-F1, and per-class F1 where available. Only generated when `data/eval/eval_tickets.csv` is present.
+Shows measured ML-vs-keyword baseline performance on the labeled eval set, including accuracy, macro-F1, weighted-F1, and per-class F1 where available.
 
 The Streamlit dashboard (`streamlit run app.py`) provides interactive versions of all panels, plus a live routing demo for pasting ticket text directly.
 
@@ -177,7 +173,7 @@ These are public support datasets used to simulate a gTech-style support routing
 | `app.py` | Streamlit dashboard |
 | `data/eval/eval_tickets.csv` | Committed labeled eval set (99 tickets, 6 issue types) |
 
-> `assets/dashboard_preview.png` is committed as a preview screenshot. Run the pipeline locally and relaunch Streamlit to generate a fresh version.
+> Run `python scripts/generate_preview_assets.py` after `python scripts/run_pipeline_local.py` to regenerate `assets/dashboard_overview.png`, `assets/policy_tradeoff.png`, and `assets/model_evaluation.png`.
 
 ## Artifacts generated
 
