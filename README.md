@@ -1,5 +1,7 @@
 # LLM-powered Support Ticket Routing System
 
+**Live Case Study: [portfolio-site-wheat-nu.vercel.app](https://portfolio-site-wheat-nu.vercel.app)**
+
 Author: **Allen Xu**
 
 An end-to-end **support operations routing system** that combines deterministic rules, calibrated ML classifiers, and LLM fallback to route support tickets into operational queues, with configurable confidence thresholds and human-safe fallback.
