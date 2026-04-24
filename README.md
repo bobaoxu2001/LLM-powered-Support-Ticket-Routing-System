@@ -49,11 +49,12 @@ python scripts/run_pipeline.py --download
 # 4. Launch the dashboard
 streamlit run app.py
 
-# 5. Optional: apply a custom threshold from the sweep recommendation
+# 5. Optional: apply custom thresholds (pick values from outputs/threshold_sweep.csv)
 python scripts/run_pipeline.py --high-threshold 0.80 --low-threshold 0.50
 
-# 6. Optional: enrich human-fallback tickets with LLM resolution guidance
-python scripts/run_pipeline.py --enrich-human-with-llm
+# 6. Optional: custom thresholds + LLM enrichment for human-fallback tickets
+#    (adds suggested_path, should_escalate, reason, llm_summary — costs extra LLM calls)
+python scripts/run_pipeline.py --high-threshold 0.80 --low-threshold 0.50 --enrich-human-with-llm
 ```
 
 > **Note:** `--download` requires Kaggle API credentials (`~/.kaggle/kaggle.json` or env vars). If data is already present locally, omit `--download`.
