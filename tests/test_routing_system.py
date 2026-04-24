@@ -306,6 +306,10 @@ def test_evaluate_on_labeled_set_keys():
     assert "ml_accuracy" in result
     assert "keyword_baseline_accuracy" in result
     assert "ml_lift_over_baseline" in result
+    assert "ml_macro_f1" in result
+    assert "keyword_macro_f1" in result
+    assert "per_class_metrics_df" in result
+    assert "confusion_matrix_df" in result
     assert result["n_eval_samples"] == 3
 
 
