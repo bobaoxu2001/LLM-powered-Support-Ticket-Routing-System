@@ -173,7 +173,7 @@ These are public support datasets used to simulate a gTech-style support routing
 | `app.py` | Streamlit dashboard |
 | `data/eval/eval_tickets.csv` | Committed labeled eval set (99 tickets, 6 issue types) |
 
-> Run `python scripts/generate_preview_assets.py` after `python scripts/run_pipeline_local.py` to regenerate `assets/dashboard_overview.png`, `assets/policy_tradeoff.png`, and `assets/model_evaluation.png`.
+> Run `python scripts/generate_preview_assets.py` after `python scripts/run_pipeline.py --download` to regenerate `assets/dashboard_overview.png`, `assets/policy_tradeoff.png`, and `assets/model_evaluation.png`.
 
 ## Artifacts generated
 
