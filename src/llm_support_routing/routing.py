@@ -6,7 +6,7 @@ from typing import Any
 import pandas as pd
 
 from .config import RULE_PATTERNS, RoutingThresholds
-from .llm import llm_classify_ticket, llm_summarize_ticket
+from .llm import llm_classify_ticket, llm_resolution_and_escalation, llm_summarize_ticket
 from .models import predict_with_confidence
 
 
@@ -51,6 +51,7 @@ def route_ticket(
     model,
     thresholds: RoutingThresholds = RoutingThresholds(),
     urgency_model=None,
+    enrich_human: bool = False,
 ) -> RoutingDecision:
     text_lower = text.lower()
 
@@ -112,11 +113,18 @@ def route_ticket(
         )
 
     # 4) Human fallback for uncertain middle-confidence band
+    meta: dict[str, Any] = {"issue_type": label, "urgency": urgency}
+    if enrich_human:
+        resolution = llm_resolution_and_escalation(text)
+        meta["llm_summary"] = llm_summarize_ticket(text)
+        meta["suggested_path"] = str(resolution.get("suggested_path", ""))
+        meta["should_escalate"] = str(resolution.get("should_escalate", ""))
+        meta["reason"] = str(resolution.get("reason", ""))
     return RoutingDecision(
         route="human_triage_queue",
         stage="human_fallback",
         confidence=prob,
-        metadata={"issue_type": label, "urgency": urgency},
+        metadata=meta,
     )
 
 
@@ -124,17 +132,30 @@ def route_dataframe(
     df: pd.DataFrame,
     model,
     urgency_model=None,
+    thresholds: RoutingThresholds = RoutingThresholds(),
+    enrich_human: bool = False,
     summarize_human: bool = False,
 ) -> pd.DataFrame:
     """Route a DataFrame of tickets.
 
     Runs ML inference in a single batched call, then invokes the LLM only for
-    the low-confidence subset. Pass urgency_model to enable urgency-based
-    priority queue suffixes. Set summarize_human=True to generate LLM summaries
-    for tickets sent to human agents.
+    the low-confidence subset.
+
+    Args:
+        urgency_model: when provided, urgency predictions append _priority
+            suffix to queues for high/critical tickets.
+        thresholds: confidence gates for ML and LLM stages.  Pass an explicit
+            RoutingThresholds to apply thresholds from --high-threshold /
+            --low-threshold CLI flags; the default matches config defaults.
+        enrich_human: when True, calls llm_resolution_and_escalation() and
+            llm_summarize_ticket() for every human-fallback ticket.  Adds
+            llm_summary, suggested_path, should_escalate, and reason columns.
+            Incurs one extra LLM call per human-fallback ticket; keep False
+            (default) in high-volume or cost-sensitive runs.
+        summarize_human: legacy flag — superseded by enrich_human.  When True
+            and enrich_human is False, generates only llm_summary.
     """
     texts = df["text"].tolist()
-    thresholds = RoutingThresholds()
 
     # Single batched ML inference call
     all_labels, all_probs = predict_with_confidence(model, texts)
@@ -164,6 +185,9 @@ def route_dataframe(
                 "llm_issue_type": issue_type,
                 "llm_urgency": urgency,
                 "llm_summary": "",
+                "suggested_path": "",
+                "should_escalate": "",
+                "reason": "",
             })
             continue
 
@@ -180,6 +204,9 @@ def route_dataframe(
                 "llm_issue_type": "",
                 "llm_urgency": urgency,
                 "llm_summary": "",
+                "suggested_path": "",
+                "should_escalate": "",
+                "reason": "",
             })
             continue
 
@@ -195,6 +222,9 @@ def route_dataframe(
                     "llm_issue_type": "",
                     "llm_urgency": urgency,
                     "llm_summary": "",
+                    "suggested_path": "",
+                    "should_escalate": "",
+                    "reason": "",
                 })
             else:
                 issue_type = llm_result.get("issue_type", "other")
@@ -209,11 +239,26 @@ def route_dataframe(
                     "llm_issue_type": issue_type,
                     "llm_urgency": llm_urgency,
                     "llm_summary": "",
+                    "suggested_path": "",
+                    "should_escalate": "",
+                    "reason": "",
                 })
             continue
 
-        # 4) Human fallback — optionally generate a summary for the agent
-        summary = llm_summarize_ticket(text) if summarize_human else ""
+        # 4) Human fallback — optionally enrich with LLM resolution guidance
+        summary = ""
+        suggested_path = ""
+        should_escalate = ""
+        reason = ""
+        if enrich_human:
+            resolution = llm_resolution_and_escalation(text)
+            summary = llm_summarize_ticket(text)
+            suggested_path = str(resolution.get("suggested_path", ""))
+            should_escalate = str(resolution.get("should_escalate", ""))
+            reason = str(resolution.get("reason", ""))
+        elif summarize_human:
+            summary = llm_summarize_ticket(text)
+
         records.append({
             "text": text,
             "route": "human_triage_queue",
@@ -222,6 +267,9 @@ def route_dataframe(
             "llm_issue_type": label,
             "llm_urgency": urgency,
             "llm_summary": summary,
+            "suggested_path": suggested_path,
+            "should_escalate": should_escalate,
+            "reason": reason,
         })
 
     return pd.DataFrame(records)

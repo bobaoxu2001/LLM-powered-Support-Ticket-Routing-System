@@ -19,11 +19,17 @@ def routing_metrics(routed_df: pd.DataFrame) -> dict[str, float]:
     if total == 0:
         return {"tickets": 0.0}
 
-    escalation_rate = float((routed_df["route"] == "human_triage_queue").mean())
+    # human_triage_rate: fraction of tickets sent to human_triage_queue.
+    # This is a routing-system metric, not a true escalation rate.  True
+    # escalation would require tracking which human-triaged tickets were
+    # subsequently escalated to a senior agent or engineering team — data
+    # not available at routing time.  escalation_rate is retained as a
+    # backward-compatible alias and labeled as a proxy.
+    human_triage_rate = float((routed_df["route"] == "human_triage_queue").mean())
     llm_rate = float((routed_df["stage"] == "llm_reasoning").mean())
     rule_rate = float((routed_df["stage"] == "rule_based").mean())
     ml_rate = float((routed_df["stage"] == "ml_high_confidence").mean())
-    human_rate = float((routed_df["stage"] == "human_fallback").mean())
+    human_fallback_rate = float((routed_df["stage"] == "human_fallback").mean())
     avg_confidence = float(routed_df["confidence"].mean())
 
     # Estimated cost terms (not measured runtime billing).
@@ -31,11 +37,12 @@ def routing_metrics(routed_df: pd.DataFrame) -> dict[str, float]:
 
     metrics: dict[str, float] = {
         "tickets": float(total),
-        "escalation_rate": escalation_rate,
+        "human_triage_rate": human_triage_rate,
+        "escalation_rate": human_triage_rate,  # proxy alias — see docstring above
         "llm_invocation_rate": llm_rate,
         "rule_based_rate": rule_rate,
         "ml_high_confidence_rate": ml_rate,
-        "human_fallback_rate": human_rate,
+        "human_fallback_rate": human_fallback_rate,
         "avg_routing_confidence": avg_confidence,
         "cost_per_ticket_usd_estimated": cost_per_ticket,
         "infra_cost_per_ticket_usd_estimated": _INFRA_COST_PER_TICKET_USD,
@@ -130,11 +137,46 @@ def evaluate_on_labeled_set(model, eval_path: Path) -> dict[str, object]:
     }
 
 
-def threshold_sweep(texts: list[str], model) -> pd.DataFrame:
+def threshold_sweep(
+    texts: list[str],
+    model,
+    *,
+    auto_weight: float = 1.0,
+    human_penalty: float = 1.25,
+    llm_penalty: float = 0.5,
+) -> pd.DataFrame:
     """Sweep confidence thresholds and expose cost/coverage tradeoffs.
 
     Stage shares are estimated from ML confidence only (no live LLM calls).
+    The recommendation score is a weighted policy objective:
+
+        score = auto_weight * auto_rate
+              - human_penalty * human_fallback_rate
+              - llm_penalty   * llm_fallback_rate
+
+    Default weights reflect a policy that values automation (1.0) and
+    penalises human triage (1.25×) more than LLM invocations (0.5×).
+    Adjust to match your SLA and cost priorities:
+      - Increase human_penalty if human queue capacity is the bottleneck.
+      - Increase llm_penalty if LLM API cost is the primary constraint.
+
+    This score is an analytic estimate only.  It does not account for
+    routing accuracy, queue SLA, or measured post-routing outcomes.
+    Apply recommended thresholds explicitly via --high-threshold /
+    --low-threshold in run_pipeline.py; they are not applied automatically.
     """
+    _SWEEP_COLUMNS = [
+        "threshold_high", "threshold_low",
+        "auto_routed_rate_estimated", "llm_fallback_rate_estimated", "human_fallback_rate_estimated",
+        "avg_confidence_auto", "cost_per_ticket_usd_estimated",
+        "score_automation_gain", "score_human_penalty", "score_llm_penalty",
+        "threshold_recommendation_score", "weight_auto", "weight_human_penalty", "weight_llm_penalty",
+        "auto_routed_rate", "llm_fallback_rate", "human_fallback_rate",
+        "est_cost_per_ticket_usd", "is_recommended_threshold",
+    ]
+    if not texts:
+        return pd.DataFrame(columns=_SWEEP_COLUMNS)
+
     _, probs = predict_with_confidence(model, texts)
     rows = []
     for t_high in [round(v * 0.05 + 0.50, 2) for v in range(10)]:  # 0.50 … 0.95
@@ -149,8 +191,10 @@ def threshold_sweep(texts: list[str], model) -> pd.DataFrame:
         avg_conf = float(probs[auto_mask].mean()) if auto_mask.any() else 0.0
         cost = _INFRA_COST_PER_TICKET_USD + llm_rate * _LLM_COST_PER_CALL_USD
 
-        # One simple recommendation score: prioritize high auto-route while penalizing escalations.
-        recommendation_score = auto_rate - (1.25 * human_rate) - (0.5 * llm_rate)
+        automation_gain   = auto_weight * auto_rate
+        human_cost        = human_penalty * human_rate
+        llm_cost          = llm_penalty * llm_rate
+        score             = automation_gain - human_cost - llm_cost
 
         rows.append({
             "threshold_high": t_high,
@@ -160,7 +204,15 @@ def threshold_sweep(texts: list[str], model) -> pd.DataFrame:
             "human_fallback_rate_estimated": human_rate,
             "avg_confidence_auto": avg_conf,
             "cost_per_ticket_usd_estimated": cost,
-            "threshold_recommendation_score": recommendation_score,
+            # Score breakdown — lets operators see what is driving the recommendation
+            "score_automation_gain": automation_gain,
+            "score_human_penalty": human_cost,
+            "score_llm_penalty": llm_cost,
+            "threshold_recommendation_score": score,
+            # Sweep weights used (for reproducibility)
+            "weight_auto": auto_weight,
+            "weight_human_penalty": human_penalty,
+            "weight_llm_penalty": llm_penalty,
         })
 
     sweep = pd.DataFrame(rows)
