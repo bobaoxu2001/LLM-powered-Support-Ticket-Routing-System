@@ -9,14 +9,18 @@ Requires (produced by scripts/run_pipeline.py):
     outputs/routed_tickets.csv
     outputs/threshold_sweep.csv
 
-Optional (produced only when data/eval/eval_tickets.csv exists):
+Model Evaluation chart — preferred source (produced by run_supervised_benchmark.py):
+    outputs/supervised_benchmark_comparison.csv
+    outputs/supervised_benchmark_per_class.csv
+
+Fallback (produced by run_pipeline.py when eval set exists):
     outputs/eval_comparison.csv
     outputs/eval_per_class_metrics.csv
 
 Generates:
     assets/dashboard_overview.png  — routing KPIs, stage breakdown, queue distribution
     assets/policy_tradeoff.png     — threshold cost-coverage operating curve
-    assets/model_evaluation.png    — ML vs keyword baseline (only when eval files present)
+    assets/model_evaluation.png    — ML vs keyword baseline
 """
 from __future__ import annotations
 
@@ -212,95 +216,165 @@ def generate_policy_tradeoff() -> bool:
 
 
 def generate_model_evaluation() -> bool:
-    """ML vs keyword baseline — summary bars + per-class F1."""
+    """ML vs keyword baseline — summary bars + per-class F1.
+
+    Preferred source: outputs/supervised_benchmark_comparison.csv
+      (clean metadata-derived train/test split, produced by
+       scripts/run_supervised_benchmark.py).
+
+    Fallback: outputs/eval_comparison.csv
+      (mixed eval set produced by scripts/run_pipeline.py).
+    """
     import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
 
-    eval_path = OUTPUTS / "eval_comparison.csv"
-    # Prefer supervised benchmark per-class file; fall back to compat file
-    bench_pc = OUTPUTS / "supervised_benchmark_per_class.csv"
-    pc_path  = bench_pc if bench_pc.exists() else OUTPUTS / "eval_per_class_metrics.csv"
+    bench_path    = OUTPUTS / "supervised_benchmark_comparison.csv"
+    bench_pc_path = OUTPUTS / "supervised_benchmark_per_class.csv"
+    eval_path     = OUTPUTS / "eval_comparison.csv"
+    eval_pc_path  = OUTPUTS / "eval_per_class_metrics.csv"
 
-    if not _require(eval_path, "model_evaluation"):
+    use_benchmark = bench_path.exists()
+
+    if use_benchmark:
+        print("  [model_evaluation] using supervised benchmark outputs")
+        comp = pd.read_csv(bench_path)
+
+        # Best ML model by macro-F1
+        ml_rows = comp[comp["model_name"] != "keyword_baseline"]
+        if ml_rows.empty:
+            print("[SKIP] model_evaluation: no ML rows in supervised benchmark")
+            return False
+        best_ml = ml_rows.sort_values("macro_f1", ascending=False).iloc[0]
+        kw_row  = comp[comp["model_name"] == "keyword_baseline"].iloc[0]
+
+        n_test      = int(best_ml.get("n_test", 0))
+        n_train     = int(best_ml.get("n_train", 0))
+        ml_label    = best_ml["model_name"]
+        title_main  = "Model Evaluation — Measured on Metadata-Derived Held-Out Eval Split"
+        subtitle    = (
+            f"3-class benchmark (billing / technical / other) · "
+            f"n_train={n_train:,}  n_test={n_test:,} · labels from Ticket Type metadata"
+        )
+
+        ml_vals = [
+            float(best_ml.get("accuracy",    0)),
+            float(best_ml.get("macro_f1",    0)),
+            float(best_ml.get("weighted_f1", 0)),
+        ]
+        kw_vals = [
+            float(kw_row.get("accuracy",    0)),
+            float(kw_row.get("macro_f1",    0)),
+            float(kw_row.get("weighted_f1", 0)),
+        ]
+
+        has_pc = bench_pc_path.exists()
+        pc_ml_col  = "model_name"
+        pc_ml_val  = ml_label
+        pc_kw_val  = "keyword_baseline"
+        pc_f1_col  = "f1_score"
+        pc_lbl_col = "label"
+
+    elif _require(eval_path, "model_evaluation"):
+        print("  [model_evaluation] supervised benchmark not found — using eval_comparison fallback")
+        row = pd.read_csv(eval_path).iloc[0]
+        n = int(row.get("n_eval_samples", 0))
+
+        ml_label   = "ML (TF-IDF + LR)"
+        title_main = "Model Evaluation — Measured on Labeled Eval Set"
+        subtitle   = f"n = {n} tickets (metadata-derived labels)"
+
+        ml_vals = [
+            float(row.get("ml_accuracy",   0)),
+            float(row.get("ml_macro_f1",   0)),
+            float(row.get("ml_weighted_f1",0)),
+        ]
+        kw_vals = [
+            float(row.get("keyword_baseline_accuracy", 0)),
+            float(row.get("keyword_macro_f1",          0)),
+            float(row.get("keyword_weighted_f1",       0)),
+        ]
+        has_pc     = eval_pc_path.exists()
+        pc_ml_col  = "model"
+        pc_ml_val  = "ml_tfidf_lr"
+        pc_kw_val  = "keyword_baseline"
+        pc_f1_col  = "f1_score"
+        pc_lbl_col = "label"
+    else:
         return False
 
-    row = pd.read_csv(eval_path).iloc[0]
-    has_pc = pc_path.exists()
-
+    # ── Layout ────────────────────────────────────────────────────────────────
     ncols = 2 if has_pc else 1
-    fig, axes = plt.subplots(1, ncols, figsize=(13 if has_pc else 7, 6))
+    fig, axes = plt.subplots(1, ncols, figsize=(14 if has_pc else 7, 6))
     if ncols == 1:
         axes = [axes]
 
-    n = int(row.get("n_eval_samples", 0))
-    fig.suptitle(
-        "Model Evaluation — Measured on metadata-derived held-out eval split",
-        fontsize=13, fontweight="bold",
-    )
+    fig.suptitle(title_main, fontsize=12, fontweight="bold")
 
-    # ── Summary: ML vs keyword baseline ───────────────────────────────────────
+    # ── Left panel: summary bars ───────────────────────────────────────────────
     ax = axes[0]
     width = 0.34
     metric_names = ["Accuracy", "Macro-F1", "Weighted-F1"]
-    ml_vals = [
-        float(row.get("ml_accuracy", 0)),
-        float(row.get("ml_macro_f1", 0)),
-        float(row.get("ml_weighted_f1", 0)),
-    ]
-    kw_vals = [
-        float(row.get("keyword_baseline_accuracy", 0)),
-        float(row.get("keyword_macro_f1", 0)),
-        float(row.get("keyword_weighted_f1", 0)),
-    ]
     x = np.arange(len(metric_names))
-    b_ml = ax.bar(x - width / 2, ml_vals, width, label="ML (TF-IDF + LR)", color="#4C72B0", alpha=0.85)
-    b_kw = ax.bar(x + width / 2, kw_vals, width, label="Keyword Baseline",  color="#DD8452", alpha=0.85)
+
+    # Friendly display name for legend
+    ml_display = ml_label.replace("ml_", "").replace("_", "+").replace("tfidf", "TF-IDF").upper()
+    ml_display = f"ML ({ml_display})"
+
+    b_ml = ax.bar(x - width / 2, ml_vals, width, label=ml_display,          color="#4C72B0", alpha=0.85)
+    b_kw = ax.bar(x + width / 2, kw_vals, width, label="Keyword Baseline",   color="#DD8452", alpha=0.85)
 
     ax.set_xticks(x)
     ax.set_xticklabels(metric_names, fontsize=10)
     ax.set_ylabel("Score", fontsize=10)
-    ax.set_ylim(0, 1.08)
+    ax.set_ylim(0, 1.12)
     ax.set_title("ML vs Keyword Baseline", fontsize=11)
-    ax.legend(fontsize=9)
+    ax.legend(fontsize=8.5, frameon=False)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
 
     for bar in list(b_ml) + list(b_kw):
         h = bar.get_height()
-        ax.text(
-            bar.get_x() + bar.get_width() / 2,
-            h + 0.012, f"{h:.1%}",
-            ha="center", va="bottom", fontsize=8,
-        )
+        if h > 0.01:
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                h + 0.012, f"{h:.1%}",
+                ha="center", va="bottom", fontsize=7.5,
+            )
 
-    ax.text(0.5, -0.10, f"n_test = {n} held-out tickets  |  label source: Ticket Type metadata",
-            transform=ax.transAxes, ha="center", fontsize=8, color="#555555")
+    ax.text(
+        0.5, -0.12, subtitle,
+        transform=ax.transAxes, ha="center", fontsize=7.5, color="#555555",
+        wrap=True,
+    )
 
-    # ── Per-class F1 ───────────────────────────────────────────────────────────
+    # ── Right panel: per-class F1 ─────────────────────────────────────────────
     if has_pc:
-        pc = pd.read_csv(pc_path)
+        if use_benchmark:
+            pc = pd.read_csv(bench_pc_path)
+        else:
+            pc = pd.read_csv(eval_pc_path)
+
         exclude = {"macro avg", "weighted avg", "accuracy"}
-        real = pc[~pc["label"].isin(exclude)]
-        # Support both model name conventions
-        ml_mask = real["model"].isin({"ml_tfidf_lr", "ml_improved"})
-        ml_f1 = real[ml_mask].set_index("label")["f1_score"]
-        kw_f1 = real[real["model"] == "keyword_baseline"].set_index("label")["f1_score"]
-        all_labels = sorted(set(ml_f1.index) | set(kw_f1.index))
+        real    = pc[~pc[pc_lbl_col].isin(exclude)].copy()
+        ml_pc   = real[real[pc_ml_col] == pc_ml_val].set_index(pc_lbl_col)[pc_f1_col]
+        kw_pc   = real[real[pc_ml_col] == pc_kw_val].set_index(pc_lbl_col)[pc_f1_col]
+        all_labels = sorted(set(ml_pc.index) | set(kw_pc.index))
 
         ax2 = axes[1]
         x2 = np.arange(len(all_labels))
-        ax2.bar(x2 - width / 2, [float(ml_f1.get(l, 0)) for l in all_labels],
-                width, label="ML",      color="#4C72B0", alpha=0.85)
-        ax2.bar(x2 + width / 2, [float(kw_f1.get(l, 0)) for l in all_labels],
-                width, label="Keyword", color="#DD8452", alpha=0.85)
+        ax2.bar(x2 - width / 2, [float(ml_pc.get(l, 0)) for l in all_labels],
+                width, label=ml_display, color="#4C72B0", alpha=0.85)
+        ax2.bar(x2 + width / 2, [float(kw_pc.get(l, 0)) for l in all_labels],
+                width, label="Keyword",  color="#DD8452", alpha=0.85)
+
         ax2.set_xticks(x2)
         ax2.set_xticklabels(all_labels, rotation=30, ha="right", fontsize=8.5)
         ax2.set_ylabel("F1 Score", fontsize=10)
-        ax2.set_ylim(0, 1.08)
+        ax2.set_ylim(0, 1.12)
         ax2.set_title("Per-Class F1", fontsize=11)
-        ax2.legend(fontsize=9)
+        ax2.legend(fontsize=8.5, frameon=False)
         ax2.spines["top"].set_visible(False)
         ax2.spines["right"].set_visible(False)
         ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.0%}"))
