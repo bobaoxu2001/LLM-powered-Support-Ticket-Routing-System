@@ -14,7 +14,7 @@ For a deeper explanation of design choices, evaluation strategy, operational tra
 
 ## Visual Preview
 
-These previews are generated from real project outputs after running the local pipeline.
+These previews are generated from real pipeline outputs using the two public Kaggle datasets (`thoughtvector/customer-support-on-twitter` and `suraj520/customer-support-ticket-dataset`). Run `python scripts/run_pipeline.py --download` then `python scripts/generate_preview_assets.py` to reproduce them.
 
 ### 1. Operations Overview
 

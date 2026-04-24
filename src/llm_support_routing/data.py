@@ -61,7 +61,7 @@ def download_kaggle_dataset(dataset_slug: str, destination: Path) -> None:
     Requires KAGGLE_USERNAME and KAGGLE_KEY in environment.
     """
     destination.mkdir(parents=True, exist_ok=True)
-    cmd = f"kaggle datasets download -d {dataset_slug} -p {destination} --unzip"
+    cmd = f'kaggle datasets download -d {dataset_slug} -p "{destination}" --unzip'
     exit_code = os.system(cmd)
     if exit_code != 0:
         raise RuntimeError(
